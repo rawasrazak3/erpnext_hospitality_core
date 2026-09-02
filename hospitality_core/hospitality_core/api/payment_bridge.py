@@ -1,5 +1,13 @@
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.utils import (
+    get_hotel_company,
+    get_hotel_name,
+    get_receivable_account,
+    get_mop_account,
+    get_cash_account,
+)
+
 
 @frappe.whitelist()
 def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
@@ -12,8 +20,7 @@ def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
     if amount <= 0:
         frappe.throw(_("Amount must be greater than zero."))
 
-    # Company is always Edo Heritage Hotel
-    COMPANY = "Edo Heritage Hotel"
+    company = get_hotel_company()
 
     # 1. Load the Folio
     folio = frappe.get_doc("Guest Folio", folio_name)
@@ -44,39 +51,17 @@ def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
     if not customer:
         frappe.throw(_("No customer could be resolved for Folio {0}.").format(folio_name))
 
-    # 3. Resolve the paid_to Account from Mode of Payment (always using Edo Heritage Hotel)
-    mop_account = frappe.db.get_value(
-        "Mode of Payment Account",
-        {"parent": mode_of_payment, "company": COMPANY},
-        "default_account"
-    )
-    if not mop_account:
-        # Try without company filter as fallback
-        mop_account = frappe.db.get_value(
-            "Mode of Payment Account",
-            {"parent": mode_of_payment},
-            "default_account"
-        )
-    if not mop_account:
-        frappe.throw(_(
-            "No account configured for Mode of Payment '{0}' under Edo Heritage Hotel. "
-            "Please add a default account for it."
-        ).format(mode_of_payment))
+    # 3. Resolve accounts using centralized utilities
+    mop_account = get_mop_account(mode_of_payment, company)
+    receivable_account = get_receivable_account(company)
 
-    # 4. Resolve the Accounts Receivable account from Edo Heritage Hotel
-    receivable_account = frappe.db.get_value(
-        "Company", COMPANY, "default_receivable_account"
-    )
-    if not receivable_account:
-        frappe.throw(_("No Default Receivable Account found for 'Edo Heritage Hotel'. Please configure it in Company settings."))
-
-    # 5. Resolve poster's full name from session
+    # 4. Resolve poster's full name from session
     poster_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
 
-    # 6. Build and insert the Payment Entry
+    # 5. Build and insert the Payment Entry
     pe = frappe.get_doc({
         "doctype": "Payment Entry",
-        "company": COMPANY,
+        "company": company,
         "payment_type": "Receive",
         "posting_date": frappe.utils.nowdate(),
         "party_type": "Customer",
@@ -92,6 +77,7 @@ def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
         "hotel_reception": hotel_reception,
         "reference_no": folio_name,
         "reference_date": frappe.utils.nowdate(),
+        "guest_folio": folio_name,
         "room_number": folio.room,
         "cashier": frappe.session.user,
         "remarks": (
@@ -99,6 +85,31 @@ def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
             f"| Room: {folio.room} | Reception: {hotel_reception} | Folio: {folio_name}"
         )
     })
+    
+    # Auto-allocate payment to outstanding Sales Invoices linked to this Folio
+    unpaid_invoices = frappe.get_all(
+        "Sales Invoice",
+        filters={
+            "guest_folio": folio_name,
+            "status": ("in", ["Unpaid", "Partly Paid", "Overdue"]),
+            "docstatus": 1
+        },
+        fields=["name", "outstanding_amount"],
+        order_by="posting_date asc"
+    )
+    
+    remaining_amount = amount
+    for inv in unpaid_invoices:
+        if remaining_amount <= 0.01:
+            break
+        allocate_amount = min(remaining_amount, inv.outstanding_amount)
+        pe.append("references", {
+            "reference_doctype": "Sales Invoice",
+            "reference_name": inv.name,
+            "allocated_amount": allocate_amount
+        })
+        remaining_amount -= allocate_amount
+
     pe.insert(ignore_permissions=True)
     pe.submit()
 
@@ -114,7 +125,7 @@ def issue_folio_refund(folio_name, amount, hotel_reception):
     if amount <= 0:
         frappe.throw(_("Refund amount must be greater than zero."))
 
-    COMPANY = "Edo Heritage Hotel"
+    company = get_hotel_company()
 
     # 1. Load the Folio
     folio = frappe.get_doc("Guest Folio", folio_name)
@@ -160,45 +171,21 @@ def issue_folio_refund(folio_name, amount, hotel_reception):
         mop = frappe.new_doc("Mode of Payment")
         mop.mode_of_payment = mode_of_payment
         mop.type = "Cash"
-        # We need an account, default cash account
-        cash_account = frappe.db.get_value("Company", COMPANY, "default_cash_account")
-        if not cash_account:
-            cash_account = frappe.db.get_value("Account", {"account_type": "Cash", "company": COMPANY}, "name")
-        mop.append("accounts", {"company": COMPANY, "default_account": cash_account})
+        cash_account = get_cash_account(company)
+        mop.append("accounts", {"company": company, "default_account": cash_account})
         mop.insert(ignore_permissions=True)
 
-    # 3. Resolve the paid_from Account from Mode of Payment
-    mop_account = frappe.db.get_value(
-        "Mode of Payment Account",
-        {"parent": mode_of_payment, "company": COMPANY},
-        "default_account"
-    )
-    if not mop_account:
-        mop_account = frappe.db.get_value(
-            "Mode of Payment Account",
-            {"parent": mode_of_payment},
-            "default_account"
-        )
-    if not mop_account:
-        frappe.throw(_(
-            "No account configured for Mode of Payment '{0}' under Edo Heritage Hotel. "
-            "Please add a default account for it."
-        ).format(mode_of_payment))
+    # 3. Resolve accounts using centralized utilities
+    mop_account = get_mop_account(mode_of_payment, company)
+    receivable_account = get_receivable_account(company)
 
-    # 4. Resolve the Accounts Receivable account from Edo Heritage Hotel
-    receivable_account = frappe.db.get_value(
-        "Company", COMPANY, "default_receivable_account"
-    )
-    if not receivable_account:
-        frappe.throw(_("No Default Receivable Account found for 'Edo Heritage Hotel'. Please configure it in Company settings."))
-
-    # 5. Resolve poster's full name from session
+    # 4. Resolve poster's full name from session
     poster_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
 
-    # 6. Build and insert the Payment Entry
+    # 5. Build and insert the Payment Entry
     pe = frappe.get_doc({
         "doctype": "Payment Entry",
-        "company": COMPANY,
+        "company": company,
         "payment_type": "Pay",
         "posting_date": frappe.utils.nowdate(),
         "party_type": "Customer",
@@ -214,6 +201,7 @@ def issue_folio_refund(folio_name, amount, hotel_reception):
         "hotel_reception": hotel_reception,
         "reference_no": folio_name,
         "reference_date": frappe.utils.nowdate(),
+        "guest_folio": folio_name,
         "room_number": folio.room,
         "cashier": frappe.session.user,
         "remarks": (
@@ -264,14 +252,12 @@ def issue_ledger_refund(ledger_name, amount, hotel_reception):
 def process_payment_entry(doc, method=None):
     """
     Hook: Payment Entry (on_submit, on_cancel)
-    Logic: If Reference No matches a Guest Folio ID, post or void a credit transaction to that Folio.
+    Logic: If Payment Entry is linked to a Guest Folio, post or void a credit transaction to that Folio.
     """
-    # Check if linked to Folio via Reference No
-    # We expect reference_no to hold the Folio ID (e.g., FOLIO-...)
-    if not doc.reference_no or not frappe.db.exists("Guest Folio", doc.reference_no):
+    if not doc.get("guest_folio") or not frappe.db.exists("Guest Folio", doc.guest_folio):
         return
         
-    folio_name = doc.reference_no
+    folio_name = doc.guest_folio
     
     # Determine Amount (Paid Amount is usually positive in Payment Entry)
     amount = doc.paid_amount
@@ -364,31 +350,12 @@ def create_company_folio_payment(folio_name, amount, mode_of_payment, hotel_rece
     customer = folio.company
     company_name = frappe.db.get_value("Customer", customer, "customer_name") or customer
 
-    # Company (hotel) — same constant used throughout the system
-    COMPANY = "Edo Heritage Hotel"
+    # Resolve hotel company dynamically
+    company = get_hotel_company()
 
-    # Resolve paid_to account from Mode of Payment
-    mop_account = frappe.db.get_value(
-        "Mode of Payment Account",
-        {"parent": mode_of_payment, "company": COMPANY},
-        "default_account"
-    )
-    if not mop_account:
-        mop_account = frappe.db.get_value(
-            "Mode of Payment Account",
-            {"parent": mode_of_payment},
-            "default_account"
-        )
-    if not mop_account:
-        frappe.throw(_(
-            "No account configured for Mode of Payment '{0}' under {1}. "
-            "Please add a default account for it."
-        ).format(mode_of_payment, COMPANY))
-
-    # Resolve Accounts Receivable account
-    receivable_account = frappe.db.get_value("Company", COMPANY, "default_receivable_account")
-    if not receivable_account:
-        frappe.throw(_("No Default Receivable Account found for '{0}'. Please configure it in Company settings.").format(COMPANY))
+    # Resolve accounts using centralized utilities
+    mop_account = get_mop_account(mode_of_payment, company)
+    receivable_account = get_receivable_account(company)
 
     poster_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
     narration = remarks or (
@@ -400,7 +367,7 @@ def create_company_folio_payment(folio_name, amount, mode_of_payment, hotel_rece
     # Build and submit the Payment Entry — identical pattern to guest payments
     pe = frappe.get_doc({
         "doctype": "Payment Entry",
-        "company": COMPANY,
+        "company": company,
         "payment_type": "Receive",
         "posting_date": frappe.utils.nowdate(),
         "party_type": "Customer",

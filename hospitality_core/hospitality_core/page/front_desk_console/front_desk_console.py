@@ -9,7 +9,8 @@ def get_console_data(target_date=None):
     # 1. Fetch Arrivals for specific date
     # Include 'Checked Out' in arrivals list if they arrived AND left on the target date (Day Use)
     arrivals = frappe.db.sql("""
-        SELECT res.name, g.full_name as guest_name, res.status, res.room, res.room_type, res.arrival_date
+        SELECT res.name, g.full_name as guest_name, res.status, res.room, res.room_type, 
+               res.arrival_date, res.arrival_time
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
         WHERE res.arrival_date = %s 
@@ -19,7 +20,8 @@ def get_console_data(target_date=None):
 
     # 2. Fetch Departures for specific date
     departures = frappe.db.sql("""
-        SELECT res.name, g.full_name as guest_name, res.status, res.room, res.room_type, res.departure_date
+        SELECT res.name, g.full_name as guest_name, res.status, res.room, res.room_type, 
+               res.departure_date, res.departure_time
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
         WHERE res.departure_date = %s 
@@ -30,18 +32,19 @@ def get_console_data(target_date=None):
     # 3. Stats Calculation (Date Sensitive)
     total_rooms = frappe.db.count("Hotel Room", {"is_enabled": 1})
     
-    # Calculate In-House (Night Occupancy)
-    # Logic: Arrived <= Today AND Departing > Today.
+    # Calculate In-House (Night Occupancy) using datetime comparison
+    # Logic: Arrived (datetime) <= Now AND Departing (datetime) > Now
     # This captures:
     #   - Old Check-ins (Stayovers)
     #   - New Check-ins (Arrivals)
     # It Excludes:
-    #   - Due Outs (Departing Today) -> These rooms are considered available for tonight once vacated.
-    in_house_count = frappe.db.count("Hotel Reservation", {
-        "arrival_date": ["<=", target_date],
-        "departure_date": [">", target_date],
-        "status": "Checked In" 
-    })
+    #   - Due Outs (Departing Today before their checkout time)
+    in_house_count = frappe.db.sql("""
+        SELECT COUNT(*) FROM `tabHotel Reservation`
+        WHERE CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= %s
+        AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
+        AND status = 'Checked In'
+    """, (f"{target_date} 14:00:00", f"{target_date} 14:00:00"))[0][0] or 0
 
     # Arrivals Pending (Reserved for this date)
     # These represent potential In-House guests for tonight who haven't arrived yet.

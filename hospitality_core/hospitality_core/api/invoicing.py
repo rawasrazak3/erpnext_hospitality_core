@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import flt
+from hospitality_core.hospitality_core.api.utils import get_hotel_company
 
 @frappe.whitelist()
 def create_invoice_from_folio(folio_name):
@@ -23,11 +24,12 @@ def create_invoice_from_folio(folio_name):
     items_to_bill = []
     transaction_ids = []
     
-    # Use the Company defined on the Customer or default to user's company (but ideally Folio should drive this if multi-company)
-    company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+    company = get_hotel_company()
     
     # Fetch default Cost Center for this Company
-    default_cost_center = frappe.get_cached_value('Company', company, 'cost_center')
+    default_cost_center = frappe.db.get_single_value("Hospitality Accounting Settings", "cost_center")
+    if not default_cost_center:
+        default_cost_center = frappe.get_cached_value('Company', company, 'cost_center')
 
     for trans in folio.transactions:
         if not trans.is_invoiced and not trans.is_void:
@@ -53,6 +55,7 @@ def create_invoice_from_folio(folio_name):
     si = frappe.new_doc("Sales Invoice")
     si.customer = customer
     si.company = company
+    si.guest_folio = folio.name
     si.posting_date = frappe.utils.nowdate()
     si.due_date = frappe.utils.nowdate()
     si.set("items", items_to_bill)
@@ -89,8 +92,35 @@ def get_income_account(item_code, company):
             # In v15+, defaults are in 'Item Group Default' child table
             account = frappe.db.get_value("Item Group Default", {"parent": item_group, "company": company}, "income_account")
 
-    # 3. Fallback to Company Default
+    # 3. Fallback to Hospitality Accounting Settings Income Account
+    if not account:
+        account = frappe.db.get_single_value("Hospitality Accounting Settings", "income_account")
+
+    # 4. Fallback to Company Default
     if not account:
         account = frappe.get_cached_value('Company', company, 'default_income_account')
         
     return account
+
+def cancel_sales_invoice(doc, method=None):
+    """
+    Hook: Sales Invoice (on_cancel)
+    Logic: Unlinks all Folio Transactions from the Sales Invoice so they can be re-invoiced.
+    """
+    if not doc.get("guest_folio"):
+        return
+
+    transactions = frappe.get_all("Folio Transaction", filters={
+        "reference_doctype": "Sales Invoice",
+        "reference_name": doc.name
+    })
+
+    if transactions:
+        for t in transactions:
+            frappe.db.set_value("Folio Transaction", t.name, {
+                "is_invoiced": 0,
+                "reference_doctype": None,
+                "reference_name": None
+            })
+        
+        frappe.msgprint(_("Folio Transactions unlinked from cancelled Sales Invoice {0}.").format(doc.name))

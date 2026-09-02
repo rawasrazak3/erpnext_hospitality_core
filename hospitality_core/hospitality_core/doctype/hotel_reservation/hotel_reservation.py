@@ -44,7 +44,9 @@ class HotelReservation(Document):
             room=self.room, 
             arrival_date=self.arrival_date, 
             departure_date=self.departure_date, 
-            ignore_reservation=self.name
+            ignore_reservation=self.name,
+            arrival_time=self.arrival_time,
+            departure_time=self.departure_time
         )
 
     def before_insert(self):

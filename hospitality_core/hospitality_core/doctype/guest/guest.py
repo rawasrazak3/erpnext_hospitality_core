@@ -1,6 +1,8 @@
+import re
 import frappe
 from frappe import _
 from frappe.model.document import Document
+
 
 class Guest(Document):
     def validate(self):
@@ -12,8 +14,68 @@ class Guest(Document):
             customer.insert()
             self.customer = customer.name
 
+        self.validate_aadhaar()
+        self.validate_pan()
+        self.validate_gstin()
+
+    def validate_aadhaar(self):
+        """Validates Aadhaar number format: must be exactly 12 digits."""
+        if not self.aadhaar_number:
+            return
+
+        # Remove spaces and hyphens for validation
+        aadhaar = re.sub(r"[\s\-]", "", self.aadhaar_number)
+
+        if not aadhaar.isdigit() or len(aadhaar) != 12:
+            frappe.throw(
+                _("Aadhaar Number must be exactly 12 digits. Got: {0}").format(
+                    self.aadhaar_number
+                )
+            )
+
+        # First digit cannot be 0 or 1
+        if aadhaar[0] in ("0", "1"):
+            frappe.throw(_("Aadhaar Number cannot start with 0 or 1."))
+
+        # Store in formatted form: XXXX XXXX XXXX
+        self.aadhaar_number = f"{aadhaar[:4]} {aadhaar[4:8]} {aadhaar[8:12]}"
+
+    def validate_pan(self):
+        """Validates PAN format: ABCDE1234F (5 letters, 4 digits, 1 letter)."""
+        if not self.pan_number:
+            return
+
+        pan = self.pan_number.strip().upper()
+
+        if not re.match(r"^[A-Z]{5}[0-9]{4}[A-Z]$", pan):
+            frappe.throw(
+                _("PAN Number must be in format ABCDE1234F. Got: {0}").format(
+                    self.pan_number
+                )
+            )
+
+        self.pan_number = pan
+
+    def validate_gstin(self):
+        """Validates GSTIN format: 15-character alphanumeric."""
+        if not self.gstin:
+            return
+
+        gstin = self.gstin.strip().upper()
+
+        if not re.match(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$", gstin):
+            frappe.throw(
+                _("GSTIN must be a valid 15-character GST Identification Number. Got: {0}").format(
+                    self.gstin
+                )
+            )
+
+        self.gstin = gstin
+
+
 @frappe.whitelist()
 def get_guest_stats(guest):
+    """Returns stay history and financial summary for a guest."""
     # 1. Stays & Last Room
     stays = frappe.get_all("Hotel Reservation", 
         filters={"guest": guest, "status": "Checked Out"},
@@ -27,7 +89,7 @@ def get_guest_stats(guest):
 
     # 2. Financials (Total Spend from Closed Folios)
     financials = frappe.db.sql("""
-        SELECT SUM(total_charges) as total
+        SELECT COALESCE(SUM(total_charges), 0) as total
         FROM `tabGuest Folio`
         WHERE guest = %s AND status = 'Closed'
     """, (guest,), as_dict=True)[0]

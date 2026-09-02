@@ -122,8 +122,11 @@ def handle_overstay(res):
     new_departure = add_days(nowdate(), 1)
     # Use db.set_value to skip validation when auto-extending overstays
     # This prevents conflicts with other reservations in the same room
-    frappe.db.set_value("Hotel Reservation", res.name, "departure_date", new_departure)
-    frappe.db.set_value("Hotel Reservation", res.name, "_user_tags", "Overstay")
+    frappe.db.set_value("Hotel Reservation", res.name, {
+        "departure_date": new_departure,
+        "departure_time": "12:00:00",
+        "_user_tags": "Overstay"
+    })
     # Add system comment to track the extension
     doc = frappe.get_doc("Hotel Reservation", res.name)
     doc.add_comment("Info", _("Auto-Extended: Guest still in-house at 2 PM."))

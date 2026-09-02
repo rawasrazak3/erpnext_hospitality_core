@@ -58,10 +58,11 @@ def execute(filters=None):
         """, as_dict=True)
         ooo_map = {o.room_type: o.cnt for o in ooo_data}
 
-        # Get Sold Rooms (Reservations covering this date)
-        # Arrival <= Date AND Departure > Date
+        # Get Sold Rooms (Reservations covering this date, using datetime comparison)
+        # We check for overlap with a datetime at 14:00 on the target date (standard check-in time)
+        # A room checking out at 12:00 will NOT be counted as sold for the same date
         sold_conditions = ""
-        sold_params = {"date": str_date}
+        sold_params = {"check_dt": f"{str_date} 14:00:00"}
         if filters.get("hotel_reception"):
             sold_conditions = "AND hotel_reception = %(hotel_reception)s"
             sold_params["hotel_reception"] = filters.get("hotel_reception")
@@ -70,7 +71,8 @@ def execute(filters=None):
             SELECT room_type, COUNT(name) as cnt
             FROM `tabHotel Reservation`
             WHERE status IN ('Reserved', 'Checked In')
-            AND arrival_date <= %(date)s AND departure_date > %(date)s
+            AND CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= %(check_dt)s
+            AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %(check_dt)s
             {sold_conditions}
             GROUP BY room_type
         """

@@ -8,7 +8,7 @@ def sync_room_status():
 
     Rules:
       - Rooms with an active 'Checked In' reservation → Occupied
-      - Rooms with a 'Reserved' reservation arriving today → Occupied
+      - Rooms with a 'Reserved' reservation arriving today (time-aware) → Occupied
       - Rooms marked 'Out of Order' → left unchanged (managed manually)
       - All other rooms → Available
     """
@@ -24,9 +24,13 @@ def sync_room_status():
         WHERE status = 'Checked In' AND room IS NOT NULL
     """, as_list=True, flat=True))
 
+    # Use datetime comparison: only mark as arriving if the arrival datetime has passed
     arriving_today_rooms = set(frappe.db.sql("""
         SELECT DISTINCT room FROM `tabHotel Reservation`
-        WHERE status = 'Reserved' AND arrival_date = %s AND room IS NOT NULL
+        WHERE status = 'Reserved'
+        AND arrival_date = %s
+        AND CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= NOW()
+        AND room IS NOT NULL
     """, (today,), as_list=True, flat=True))
 
     occupied_rooms = checked_in_rooms | arriving_today_rooms

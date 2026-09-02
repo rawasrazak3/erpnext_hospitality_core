@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import flt
+from hospitality_core.hospitality_core.api.utils import get_hotel_company
 
 def sync_folio_balance(doc, method=None):
     """
@@ -61,10 +62,7 @@ def check_credit_limit(customer_id, current_exposure):
     Checks if the Customer has exceeded their Credit Limit including current exposure.
     """
     try:
-        hotel_company = frappe.defaults.get_user_default("Company")
-        if not hotel_company:
-            hotel_company = frappe.db.get_single_value("Global Defaults", "default_company")
-        
+        hotel_company = get_hotel_company()
         if not hotel_company:
             return
 

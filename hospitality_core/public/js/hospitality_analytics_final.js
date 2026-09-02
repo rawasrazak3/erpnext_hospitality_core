@@ -1,16 +1,15 @@
 /**
- * Hospitality Analytics - FINAL v13 (WORD FOR WORD + CLONE & REPLACE FIX)
+ * Hospitality Analytics — v14 (Clean rewrite with null-safe chart rendering)
  * 
- * Instructions:
- * "WITHOUT THE FILTER AND THE FILTER ADJUSTED DATA, NOTHING IS DRAWN THE CHARTS TOTALLY DEPENDS ON THE FILTER DATA"
- * 
- * Fix: "Uncaught NotFoundError: Failed to execute 'removeChild' on 'Node'"
- * This is fixed by using a destructive "Clone & Replace" strategy for every redraw.
+ * Key fixes from v13:
+ * - Guards against undefined/NaN values in chart datasets (prevents SVG path errors)
+ * - Uses Clone & Replace strategy for clean redraws (prevents removeChild errors)
+ * - Charts only render after date filter selection
  */
 
 frappe.provide('frappe.hospitality');
 
-frappe.hospitality.FinalAnalyticsV13 = class {
+frappe.hospitality.FinalAnalyticsV14 = class {
     constructor() {
         this.fromDate = null;
         this.toDate = null;
@@ -32,9 +31,7 @@ frappe.hospitality.FinalAnalyticsV13 = class {
 
     init() {
         if (!this.is_analytics_page()) return;
-        console.log('[v13] Monolithic Analytics Logic Initializing (Clone & Replace active)...');
         this.inject_ui();
-        // Charts remain blank on load (Absolute dependency)
     }
 
     is_analytics_page() {
@@ -45,7 +42,7 @@ frappe.hospitality.FinalAnalyticsV13 = class {
 
     setup_observer() {
         const observer = new MutationObserver(() => {
-            if (this.is_analytics_page() && !$('#hos-v13-controls-inner').length) {
+            if (this.is_analytics_page() && !$('#hos-v14-controls-inner').length) {
                 this.inject_ui();
             }
         });
@@ -56,41 +53,41 @@ frappe.hospitality.FinalAnalyticsV13 = class {
         const $target = $('#hos-v10-controls, [id*="AN_FINAL"]');
         if (!$target.length) return;
 
-        $target.empty().append('<div id="hos-v13-controls-inner"></div>');
-        const $inner = $('#hos-v13-controls-inner');
+        $target.empty().append('<div id="hos-v14-controls-inner"></div>');
+        const $inner = $('#hos-v14-controls-inner');
 
         $inner.html(`
             <div style="background: #111827; padding: 25px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #374151;">
                 <div class="row">
                     <div class="col-sm-4">
                         <label style="color: #9ca3af; font-size: 11px; font-weight: 800; text-transform: uppercase;">From Date</label>
-                        <input type="date" id="v13-from-date" class="form-control" value="${this.fromDate || ''}" style="border-radius: 8px; font-weight: 700; border: 2px solid #374151; background: #1f2937; color: white;">
+                        <input type="date" id="v14-from-date" class="form-control" value="${this.fromDate || ''}" style="border-radius: 8px; font-weight: 700; border: 2px solid #374151; background: #1f2937; color: white;">
                     </div>
                     <div class="col-sm-4">
                         <label style="color: #9ca3af; font-size: 11px; font-weight: 800; text-transform: uppercase;">To Date</label>
-                        <input type="date" id="v13-to-date" class="form-control" value="${this.toDate || ''}" style="border-radius: 8px; font-weight: 700; border: 2px solid #374151; background: #1f2937; color: white;">
+                        <input type="date" id="v14-to-date" class="form-control" value="${this.toDate || ''}" style="border-radius: 8px; font-weight: 700; border: 2px solid #374151; background: #1f2937; color: white;">
                     </div>
                     <div class="col-sm-4" style="display: flex; align-items: flex-end;">
-                        <button id="v13-draw-btn" class="btn btn-primary btn-block" style="font-weight: 800; height: 40px; border-radius: 8px; background: #3b82f6; border: none;">DRAW CHARTS</button>
+                        <button id="v14-draw-btn" class="btn btn-primary btn-block" style="font-weight: 800; height: 40px; border-radius: 8px; background: #3b82f6; border: none;">DRAW CHARTS</button>
                     </div>
                 </div>
-                <div id="v13-guide" style="margin-top: 15px; color: #6b7280; font-size: 12px; text-align: center;">
+                <div id="v14-guide" style="margin-top: 15px; color: #6b7280; font-size: 12px; text-align: center;">
                     <i class="fa fa-info-circle"></i> Charts will only be drawn after you select a date range and click Draw.
                 </div>
             </div>
         `);
 
-        $('#v13-from-date, #v13-to-date').on('change', () => {
-            this.fromDate = $('#v13-from-date').val();
-            this.toDate = $('#v13-to-date').val();
+        $('#v14-from-date, #v14-to-date').on('change', () => {
+            this.fromDate = $('#v14-from-date').val();
+            this.toDate = $('#v14-to-date').val();
             if (this.fromDate && this.toDate) {
                 this.fetch_and_draw();
             }
         });
 
-        $('#v13-draw-btn').on('click', () => {
-            this.fromDate = $('#v13-from-date').val();
-            this.toDate = $('#v13-to-date').val();
+        $('#v14-draw-btn').on('click', () => {
+            this.fromDate = $('#v14-from-date').val();
+            this.toDate = $('#v14-to-date').val();
             if (!this.fromDate || !this.toDate) {
                 frappe.msgprint(__('Please select both From and To dates first.'));
                 return;
@@ -99,20 +96,65 @@ frappe.hospitality.FinalAnalyticsV13 = class {
         });
     }
 
+    /**
+     * Sanitizes chart data to prevent SVG path errors.
+     * Replaces undefined, NaN, null values with 0.
+     * Ensures labels and values arrays are the same length.
+     */
+    sanitize_chart_data(data) {
+        if (!data) return null;
+
+        // Ensure labels exist and are valid
+        if (!data.labels || !Array.isArray(data.labels)) return null;
+        data.labels = data.labels.filter(l => l !== undefined && l !== null);
+        
+        if (data.labels.length === 0) return null;
+
+        // Sanitize datasets
+        if (data.datasets && Array.isArray(data.datasets)) {
+            data.datasets = data.datasets.map(dataset => {
+                if (dataset.values && Array.isArray(dataset.values)) {
+                    // Replace undefined/NaN/null with 0
+                    dataset.values = dataset.values.map(v => {
+                        if (v === undefined || v === null || isNaN(v)) return 0;
+                        return Number(v);
+                    });
+
+                    // Ensure values array matches labels length
+                    while (dataset.values.length < data.labels.length) {
+                        dataset.values.push(0);
+                    }
+                    dataset.values = dataset.values.slice(0, data.labels.length);
+                }
+                return dataset;
+            });
+
+            // Remove datasets that are entirely zeros
+            // (keep at least one dataset)
+            const nonEmptyDatasets = data.datasets.filter(ds => 
+                ds.values && ds.values.some(v => v !== 0)
+            );
+            if (nonEmptyDatasets.length > 0) {
+                data.datasets = nonEmptyDatasets;
+            }
+        }
+
+        return data;
+    }
+
     fetch_and_draw() {
-        console.log(`[v13] Triggering inseparable refetch and draw lifecycle...`);
-        $('#v13-guide').html(`<span style="color: #3b82f6; font-weight: 700;">Refetching Database...</span>`);
+        $('#v14-guide').html(`<span style="color: #3b82f6; font-weight: 700;">Fetching data...</span>`);
 
         this.charts.forEach(chart => {
             let el = document.getElementById(chart.id);
             if (!el || !el.parentNode) return;
 
-            // CLONE & REPLACE Strategy: Sever all ties to legacy chart observers
+            // Clone & Replace Strategy: Sever all ties to legacy chart observers
             const newEl = el.cloneNode(false);
             el.parentNode.replaceChild(newEl, el);
-            el = newEl; // Reference the clean node for rendering
+            el = newEl;
 
-            el.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #9ca3af; font-style: italic;">Refetching...</div>';
+            el.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #9ca3af; font-style: italic;">Loading...</div>';
 
             frappe.call({
                 method: 'hospitality_core.hospitality_core.dashboard_data.get_hospitality_analytics_data',
@@ -122,8 +164,12 @@ frappe.hospitality.FinalAnalyticsV13 = class {
                     to_date: this.toDate
                 },
                 callback: (r) => {
-                    const data = r.message;
+                    const raw_data = r.message;
                     el.innerHTML = '';
+
+                    // Sanitize data before rendering
+                    const data = this.sanitize_chart_data(raw_data);
+
                     if (!data || !data.labels || data.labels.length === 0) {
                         el.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #9ca3af;">No Data Found</div>';
                         return;
@@ -143,17 +189,17 @@ frappe.hospitality.FinalAnalyticsV13 = class {
                             chartConfig.axisOptions = { xIsSeries: true, shortenYAxisNumbers: 1 };
                         }
 
-                        // Create the chart on the NEW, CLEAN element
                         new frappe.Chart(el, chartConfig);
                     } catch (err) {
-                        console.error(`[v13] Render Error on ${chart.name}:`, err);
+                        el.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ef4444; font-size: 12px;">Chart render error</div>`;
+                        console.error(`Chart render error on ${chart.name}:`, err);
                     }
                 }
             });
         });
 
         setTimeout(() => {
-            $('#v13-guide').html(`<span style="color: #10b981; font-weight: 700;">Synced for ${this.fromDate} to ${this.toDate}</span>`);
+            $('#v14-guide').html(`<span style="color: #10b981; font-weight: 700;">Synced for ${this.fromDate} to ${this.toDate}</span>`);
         }, 1200);
     }
 };
@@ -161,10 +207,10 @@ frappe.hospitality.FinalAnalyticsV13 = class {
 // Global Boot
 $(document).on('page-change', () => {
     setTimeout(() => {
-        window.hospitality_v13_manager = new frappe.hospitality.FinalAnalyticsV13();
+        window.hospitality_v14_manager = new frappe.hospitality.FinalAnalyticsV14();
     }, 1000);
 });
 
 if (document.readyState === 'complete') {
-    window.hospitality_v13_manager = new frappe.hospitality.FinalAnalyticsV13();
+    window.hospitality_v14_manager = new frappe.hospitality.FinalAnalyticsV14();
 }

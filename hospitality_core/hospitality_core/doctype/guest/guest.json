@@ -1,26 +1,39 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "format:{full_name}",
+ "autoname": "format:{full_name}-{####}",
  "creation": "2025-01-28 10:30:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "full_name",
   "guest_type",
-  "email_id",
-  "mobile_no",
+  "gender",
+  "date_of_birth",
+  "nationality",
   "column_break_1",
   "customer",
+  "email_id",
+  "mobile_no",
   "address",
+  "state",
+  "section_break_identity",
+  "identification_type",
   "identification_no",
-  "identification_type"
+  "column_break_identity",
+  "aadhaar_number",
+  "pan_number",
+  "gstin",
+  "section_break_preferences",
+  "special_requests",
+  "vip_notes"
  ],
  "fields": [
   {
    "fieldname": "full_name",
    "fieldtype": "Data",
    "in_list_view": 1,
+   "in_global_search": 1,
    "label": "Full Name",
    "reqd": 1
   },
@@ -29,9 +42,27 @@
    "fieldname": "guest_type",
    "fieldtype": "Select",
    "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Guest Type",
    "options": "Regular\nVIP\nCorporate\nStaff\nBlacklisted",
    "reqd": 1
+  },
+  {
+   "fieldname": "gender",
+   "fieldtype": "Select",
+   "label": "Gender",
+   "options": "\nMale\nFemale\nOther"
+  },
+  {
+   "fieldname": "date_of_birth",
+   "fieldtype": "Date",
+   "label": "Date of Birth"
+  },
+  {
+   "fieldname": "nationality",
+   "fieldtype": "Data",
+   "label": "Nationality",
+   "default": "Indian"
   },
   {
    "fieldname": "email_id",
@@ -42,7 +73,8 @@
   {
    "fieldname": "mobile_no",
    "fieldtype": "Data",
-   "label": "Mobile No"
+   "label": "Mobile No",
+   "options": "Phone"
   },
   {
    "fieldname": "column_break_1",
@@ -53,7 +85,7 @@
    "fieldtype": "Link",
    "label": "ERPNext Customer Link",
    "options": "Customer",
-   "description": "Required for Corporate Guests to link to Company Billing."
+   "description": "Auto-created on first save. Links to Company Billing for Corporate Guests."
   },
   {
    "fieldname": "address",
@@ -61,20 +93,70 @@
    "label": "Address"
   },
   {
-   "fieldname": "identification_no",
+   "fieldname": "state",
    "fieldtype": "Data",
-   "label": "Identification No"
+   "label": "State",
+   "description": "State of residence (for GST intra/inter-state determination)"
+  },
+  {
+   "fieldname": "section_break_identity",
+   "fieldtype": "Section Break",
+   "label": "Identity & Compliance"
   },
   {
    "fieldname": "identification_type",
    "fieldtype": "Select",
    "label": "ID Type",
-   "options": "\nPassport\nNational ID\nDriver License"
+   "options": "\nAadhaar Card\nPAN Card\nVoter ID\nDriving License\nPassport\nOther"
+  },
+  {
+   "fieldname": "identification_no",
+   "fieldtype": "Data",
+   "label": "ID Number"
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "aadhaar_number",
+   "fieldtype": "Data",
+   "label": "Aadhaar Number",
+   "description": "12-digit Aadhaar number for C-Form / police reporting"
+  },
+  {
+   "fieldname": "pan_number",
+   "fieldtype": "Data",
+   "label": "PAN Number",
+   "description": "Required for transactions above ₹2,00,000 (Form 60/61 compliance)"
+  },
+  {
+   "fieldname": "gstin",
+   "fieldtype": "Data",
+   "label": "GSTIN",
+   "description": "Guest's GST Identification Number (for B2B invoicing)"
+  },
+  {
+   "fieldname": "section_break_preferences",
+   "fieldtype": "Section Break",
+   "label": "Preferences & Notes",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "special_requests",
+   "fieldtype": "Small Text",
+   "label": "Special Requests"
+  },
+  {
+   "fieldname": "vip_notes",
+   "fieldtype": "Small Text",
+   "label": "VIP / Staff Notes",
+   "depends_on": "eval:doc.guest_type=='VIP' || doc.guest_type=='Blacklisted'"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-01-28 14:30:00.000000",
+ "modified": "2026-07-13 10:30:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Guest",
@@ -104,6 +186,7 @@
    "write": 1
   }
  ],
+ "search_fields": "full_name,mobile_no,email_id",
  "sort_field": "modified",
  "sort_order": "DESC",
  "track_changes": 1

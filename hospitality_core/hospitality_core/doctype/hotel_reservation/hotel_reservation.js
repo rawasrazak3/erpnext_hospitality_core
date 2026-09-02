@@ -259,6 +259,7 @@ function set_reservation_read_only_state(frm) {
     if (frm.doc.status === 'Checked In') {
         exceptions = [
             'departure_date',
+            'departure_time',
             'discount_value',
             'is_company_guest',
             'company',

@@ -27,6 +27,8 @@ def get_hospitality_analytics_data(chart_name, from_date=None, to_date=None):
 		return get_payment_mode_distribution(from_date, to_date)
 	elif chart_name == "Gross Profit Margin Trend":
 		return get_gross_profit_margin_trend(from_date, to_date)
+	elif chart_name == "Maintenance Cost by Room Type":
+		return get_maintenance_cost_by_room_type(from_date, to_date)
 	elif chart_name == "Today's Occupancy":
 		return get_today_occupancy()
 	elif chart_name == "Today's Revenue":
@@ -47,9 +49,10 @@ def get_occupancy_rate_trend(from_date, to_date):
 		occ_count = frappe.db.sql("""
 			SELECT COUNT(*) 
 			FROM `tabHotel Reservation` 
-			WHERE arrival_date <= %s AND departure_date > %s
+			WHERE CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= %s
+			AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
 			AND status NOT IN ('Cancelled', 'No Show')
-		""", (d_str, d_str))[0][0]
+		""", (f"{d_str} 14:00:00", f"{d_str} 14:00:00"))[0][0]
 		
 		dates.append(d_str)
 		values.append(round((flt(occ_count) / total_rooms) * 100.0, 2))
@@ -75,9 +78,10 @@ def get_adr_trend(from_date, to_date):
 		# Occupied rooms for the day
 		occ_count = frappe.db.sql("""
 			SELECT COUNT(*) FROM `tabHotel Reservation`
-			WHERE arrival_date <= %s AND departure_date > %s
+			WHERE CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= %s
+			AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
 			AND status NOT IN ('Cancelled', 'No Show')
-		""", (d_str, d_str))[0][0] or 0
+		""", (f"{d_str} 14:00:00", f"{d_str} 14:00:00"))[0][0] or 0
 		
 		dates.append(d_str)
 		values.append(round(flt(rev) / occ_count, 2) if occ_count > 0 else 0)
@@ -135,11 +139,11 @@ def get_revenue_expense_trend(from_date, to_date):
 			AND (reference_doctype != 'Payment Entry' OR reference_doctype IS NULL)
 		""", (d_str,))[0][0] or 0
 		
-		exp = frappe.db.get_value("Hospitality Expense", {"expense_date": d_str, "docstatus": 1}, "SUM(grand_total)") or 0
+		exp = flt(frappe.db.get_value("Hospitality Expense", {"expense_date": d_str, "docstatus": 1}, "SUM(grand_total)"))
 		
 		dates.append(d_str)
-		revenue.append(flt(rev))
-		expenses.append(flt(exp))
+		revenue.append(flt(rev, 2))
+		expenses.append(flt(exp, 2))
 		curr += timedelta(days=1)
 		
 	return {
@@ -196,7 +200,7 @@ def get_payment_mode_distribution(from_date, to_date):
 
 def get_maintenance_cost_by_room_type(from_date, to_date):
 	data = frappe.db.sql("""
-		SELECT room.room_type, SUM(exp.grand_total) as total
+		SELECT room.room_type, COALESCE(SUM(exp.grand_total), 0) as total
 		FROM `tabHospitality Expense` exp
 		JOIN `tabHotel Maintenance Request` mr ON exp.maintenance_request = mr.name
 		JOIN `tabHotel Room` room ON mr.room = room.room_number
@@ -204,10 +208,14 @@ def get_maintenance_cost_by_room_type(from_date, to_date):
 		GROUP BY room.room_type
 	""", (from_date, to_date), as_dict=1)
 	
+	if not data:
+		return {"labels": [], "datasets": [{"values": []}]}
+	
 	return {
-		"labels": [d.room_type for d in data],
-		"datasets": [{"values": [flt(d.total) for d in data]}]
+		"labels": [d.room_type or "Unknown" for d in data],
+		"datasets": [{"values": [flt(d.total, 2) for d in data]}]
 	}
+
 def get_gross_profit_margin_trend(from_date, to_date):
 	dates = []
 	values = []
@@ -237,9 +245,10 @@ def get_today_occupancy():
 	d_str = nowdate()
 	occ_count = frappe.db.sql("""
 		SELECT COUNT(*) FROM `tabHotel Reservation` 
-		WHERE arrival_date <= %s AND departure_date > %s
+		WHERE CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= %s
+		AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
 		AND status NOT IN ('Cancelled', 'No Show')
-	""", (d_str, d_str))[0][0] or 0
+	""", (f"{d_str} 14:00:00", f"{d_str} 14:00:00"))[0][0] or 0
 	return round((flt(occ_count) / total_rooms) * 100.0, 2)
 
 @frappe.whitelist()

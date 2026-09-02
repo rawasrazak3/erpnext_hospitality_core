@@ -9,14 +9,15 @@ def check_availability_counts(start_date, end_date):
         order_by="room_number"
     )
 
-    # 2. Get all Overlapping Reservations
+    # 2. Get all Overlapping Reservations using full datetime comparison
+    # Default check-in time: 14:00, default check-out time: 12:00
     reservations = frappe.db.sql("""
         SELECT room, status, name, guest
         FROM `tabHotel Reservation`
         WHERE status IN ('Reserved', 'Checked In')
-        AND arrival_date < %s
-        AND departure_date > %s
-    """, (end_date, start_date), as_dict=True)
+        AND CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) < %s
+        AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
+    """, (f"{end_date} 12:00:00", f"{start_date} 14:00:00"), as_dict=True)
 
     reservation_map = {r.room: r for r in reservations}
 

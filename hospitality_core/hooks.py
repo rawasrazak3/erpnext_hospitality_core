@@ -54,7 +54,10 @@ doc_events = {
     "Sales Invoice": {
         "before_submit": "hospitality_core.hospitality_core.api.stock.disable_stock_for_consolidated_pos_sales_invoice",
         "on_submit": "hospitality_core.api.composite_item_utils.process_composite_items_in_invoice",
-        "on_cancel": "hospitality_core.api.composite_item_utils.process_composite_items_in_invoice"
+        "on_cancel": [
+            "hospitality_core.api.composite_item_utils.process_composite_items_in_invoice",
+            "hospitality_core.hospitality_core.api.invoicing.cancel_sales_invoice"
+        ]
     },
     "Folio Ledger Adjustment": {
         "on_submit": "hospitality_core.hospitality_core.api.folio.process_ledger_adjustment",

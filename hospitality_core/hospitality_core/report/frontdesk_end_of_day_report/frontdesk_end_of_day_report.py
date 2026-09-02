@@ -67,19 +67,19 @@ def get_data(filters):
 		retained = frappe.db.sql("""
 			SELECT count(name) FROM `tabHotel Reservation`
 			WHERE
-				arrival_date < %s
-				AND departure_date > %s
+				CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) < %s
+				AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
 				AND hotel_reception = %s
 				AND status IN ('Checked In', 'Checked Out')
-		""", (report_date, report_date, reception))[0][0]
+		""", (f"{report_date} 14:00:00", f"{report_date} 14:00:00", reception))[0][0]
 	else:
 		retained = frappe.db.sql("""
 			SELECT count(name) FROM `tabHotel Reservation`
 			WHERE
-				arrival_date < %s
-				AND departure_date > %s
+				CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) < %s
+				AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
 				AND status IN ('Checked In', 'Checked Out')
-		""", (report_date, report_date))[0][0]
+		""", (f"{report_date} 14:00:00", f"{report_date} 14:00:00"))[0][0]
 
 	data.append({
 		"metric": "Retained Guests",

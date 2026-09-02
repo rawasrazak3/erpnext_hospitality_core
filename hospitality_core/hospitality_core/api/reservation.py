@@ -1,10 +1,34 @@
 import frappe
 from frappe import _
 from frappe.utils import getdate, date_diff, nowdate
+from datetime import datetime, time as dt_time
 
-def check_availability(room, arrival_date, departure_date, ignore_reservation=None):
+
+def _make_datetime(date_val, time_val, default_time="14:00:00"):
     """
-    Checks if a room is available for the given date range.
+    Combine a Date and a Time field into a full datetime for accurate overlap comparison.
+    Falls back to `default_time` (e.g. '14:00:00' for check-in, '12:00:00' for check-out)
+    when time_val is None or empty.
+    """
+    d = getdate(date_val)
+    if time_val:
+        ts = str(time_val).strip()
+        parts = ts.split(":")
+        h = int(parts[0]) if len(parts) > 0 else 0
+        m = int(parts[1]) if len(parts) > 1 else 0
+        s = int(parts[2]) if len(parts) > 2 else 0
+        t = dt_time(h, m, s)
+    else:
+        parts = default_time.split(":")
+        t = dt_time(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
+    return datetime.combine(d, t)
+
+
+@frappe.whitelist()
+def check_availability(room, arrival_date, departure_date, ignore_reservation=None,
+                       arrival_time=None, departure_time=None):
+    """
+    Checks if a room is available for the given date+time range.
     Returns True if available, raises ValidationError if not.
     """
     if not room or not arrival_date or not departure_date:
@@ -18,6 +42,10 @@ def check_availability(room, arrival_date, departure_date, ignore_reservation=No
     if room_status.status == "Out of Order":
         frappe.throw(_("Room {0} is marked Out of Order.").format(room))
 
+    # Build full datetime for the new booking
+    new_arrival_dt = _make_datetime(arrival_date, arrival_time, "14:00:00")
+    new_departure_dt = _make_datetime(departure_date, departure_time, "12:00:00")
+
     # 2. Check Overlapping Reservations
     # Logic: New Arrival < Existing Departure AND New Departure > Existing Arrival
     filters = {
@@ -28,30 +56,39 @@ def check_availability(room, arrival_date, departure_date, ignore_reservation=No
     
     existing_bookings = frappe.get_all("Hotel Reservation", 
         filters=filters,
-        fields=["name", "arrival_date", "departure_date", "guest"]
+        fields=["name", "arrival_date", "arrival_time", "departure_date", "departure_time", "guest"]
     )
 
     for booking in existing_bookings:
-        # Check for date overlap
-        if (getdate(arrival_date) < getdate(booking.departure_date)) and \
-           (getdate(departure_date) > getdate(booking.arrival_date)):
-             frappe.throw(
-                _("Room {0} is already booked by {1} from {2} to {3} (Reservation: {4})").format(
+        # Build full datetime for the existing booking
+        existing_arrival_dt = _make_datetime(booking.arrival_date, booking.arrival_time, "14:00:00")
+        existing_departure_dt = _make_datetime(booking.departure_date, booking.departure_time, "12:00:00")
+
+        # Check for strict overlap using full Datetime comparison
+        if (new_arrival_dt < existing_departure_dt) and \
+           (new_departure_dt > existing_arrival_dt):
+            # It's an overlap
+            frappe.throw(_("Room {0} is already booked for Guest {1} from {2} to {3}. (Reservation: {4})").format(
                     room, booking.guest, booking.arrival_date, booking.departure_date, booking.name
                 )
              )
     
     return True
 
-def check_bulk_availability(rooms, arrival_date, departure_date, ignore_reservation=None):
+def check_bulk_availability(rooms, arrival_date, departure_date, ignore_reservation=None,
+                            arrival_time=None, departure_time=None):
     """
-    Checks if a list of rooms is available for the given date range.
+    Checks if a list of rooms is available for the given date+time range.
     Collects ALL conflicts and raises a single ValidationError.
     """
     if not rooms or not arrival_date or not departure_date:
         return
 
     conflicts = []
+
+    # Build full datetime for the new booking
+    new_arrival_dt = _make_datetime(arrival_date, arrival_time, "14:00:00")
+    new_departure_dt = _make_datetime(departure_date, departure_time, "12:00:00")
 
     # 1. Check Room Maintenance Status for all rooms in batch
     room_data = frappe.get_all("Hotel Room", 
@@ -80,18 +117,23 @@ def check_bulk_availability(rooms, arrival_date, departure_date, ignore_reservat
             "status": ["in", ["Reserved", "Checked In"]],
             "name": ["!=", ignore_reservation] if ignore_reservation else ["is", "set"]
         },
-        fields=["name", "arrival_date", "departure_date", "guest", "room"]
+        fields=["name", "arrival_date", "arrival_time", "departure_date", "departure_time", "guest", "room"]
     )
 
     for booking in existing_bookings:
-        # Check for date overlap
-        if (getdate(arrival_date) < getdate(booking.departure_date)) and \
-           (getdate(departure_date) > getdate(booking.arrival_date)):
-             conflicts.append(
-                _("Room {0} is already booked by {1} from {2} to {3} (Reservation: {4})").format(
+        # Build full datetime for the existing booking
+        existing_arrival_dt = _make_datetime(booking.arrival_date, booking.arrival_time, "14:00:00")
+        existing_departure_dt = _make_datetime(booking.departure_date, booking.departure_time, "12:00:00")
+
+        # Check for strict overlap using full Datetime comparison
+        if (new_arrival_dt < existing_departure_dt) and \
+           (new_departure_dt > existing_arrival_dt):
+            # Overlap found
+            conflicts.append(
+                _("Room {0} is already booked for Guest {1} from {2} to {3}. (Reservation: {4})").format(
                     booking.room, booking.guest, booking.arrival_date, booking.departure_date, booking.name
                 )
-             )
+            )
 
     if conflicts:
         message = _("The following availability issues were found:") + "<br><br>"
@@ -131,6 +173,7 @@ def get_available_rooms_for_picker(doctype, txt, searchfield, start, page_len, f
         """, (room_type, room_type, f"%{txt}%", start, page_len))
 
     # Complex Query: Find rooms that are NOT in the overlapping reservations set
+    # Uses CONCAT(date, time) to build full datetime for accurate time-based overlap comparison
     return frappe.db.sql("""
         SELECT name, room_type, status
         FROM `tabHotel Room`
@@ -142,12 +185,15 @@ def get_available_rooms_for_picker(doctype, txt, searchfield, start, page_len, f
             SELECT room FROM `tabHotel Reservation`
             WHERE status IN ('Reserved', 'Checked In')
             AND name != %s
-            AND arrival_date < %s
-            AND departure_date > %s
+            AND CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) < %s
+            AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
         )
         ORDER BY name ASC
         LIMIT %s, %s
-    """, (room_type, room_type, f"%{txt}%", ignore or "", departure, arrival, start, page_len))
+    """, (room_type, room_type, f"%{txt}%", ignore or "",
+          f"{departure} {filters.get('departure_time') or '12:00:00'}",
+          f"{arrival} {filters.get('arrival_time') or '14:00:00'}",
+          start, page_len))
 
 def create_folio(reservation_doc):
     """
