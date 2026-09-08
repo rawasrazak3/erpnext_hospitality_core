@@ -1,0 +1,325 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-09-03 02:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "guest",
+  "guest_name",
+  "mobile_no",
+  "col_break_head",
+  "status",
+  "enquiry",
+  "hotel_reception",
+  "booking_source",
+  "sec_stay",
+  "arrival_date",
+  "arrival_time",
+  "departure_date",
+  "departure_time",
+  "col_break_stay",
+  "nights",
+  "adults",
+  "children",
+  "hold_expiry",
+  "sec_rooms",
+  "rooms",
+  "sec_money",
+  "total_amount",
+  "advance_required",
+  "col_break_money",
+  "advance_received",
+  "balance_due",
+  "sec_payments",
+  "booking_folio",
+  "payments",
+  "sec_other",
+  "cancellation_charge",
+  "special_requests",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "default": "HB-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "HB-.YYYY.-",
+   "print_hide": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "guest",
+   "fieldtype": "Link",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "label": "Guest",
+   "options": "Guest",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "guest.full_name",
+   "fieldname": "guest_name",
+   "fieldtype": "Data",
+   "label": "Guest Name",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "guest.mobile_no",
+   "fieldname": "mobile_no",
+   "fieldtype": "Data",
+   "label": "Mobile",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Draft\nTentative\nConfirmed\nChecked In\nCompleted\nCancelled\nNo Show",
+   "reqd": 1
+  },
+  {
+   "fieldname": "enquiry",
+   "fieldtype": "Link",
+   "label": "Enquiry",
+   "options": "Hotel Enquiry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "hotel_reception",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "Hotel Reception"
+  },
+  {
+   "fieldname": "booking_source",
+   "fieldtype": "Link",
+   "label": "Source",
+   "options": "Hotel Enquiry Source"
+  },
+  {
+   "fieldname": "sec_stay",
+   "fieldtype": "Section Break",
+   "label": "Stay"
+  },
+  {
+   "fieldname": "arrival_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Arrival",
+   "reqd": 1
+  },
+  {
+   "fieldname": "arrival_time",
+   "fieldtype": "Time",
+   "label": "Arrival Time"
+  },
+  {
+   "fieldname": "departure_date",
+   "fieldtype": "Date",
+   "label": "Departure",
+   "reqd": 1
+  },
+  {
+   "fieldname": "departure_time",
+   "fieldtype": "Time",
+   "label": "Departure Time"
+  },
+  {
+   "fieldname": "col_break_stay",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "nights",
+   "fieldtype": "Int",
+   "label": "Nights",
+   "read_only": 1
+  },
+  {
+   "default": "2",
+   "fieldname": "adults",
+   "fieldtype": "Int",
+   "label": "Adults"
+  },
+  {
+   "default": "0",
+   "fieldname": "children",
+   "fieldtype": "Int",
+   "label": "Children"
+  },
+  {
+   "depends_on": "eval:doc.status=='Tentative'",
+   "description": "A Tentative hold blocks inventory until this time, then releases automatically.",
+   "fieldname": "hold_expiry",
+   "fieldtype": "Datetime",
+   "label": "Hold Expires"
+  },
+  {
+   "fieldname": "sec_rooms",
+   "fieldtype": "Section Break",
+   "label": "Rooms"
+  },
+  {
+   "fieldname": "rooms",
+   "fieldtype": "Table",
+   "label": "Rooms",
+   "options": "Hotel Booking Room",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sec_money",
+   "fieldtype": "Section Break",
+   "label": "Money"
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Currency",
+   "label": "Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "advance_required",
+   "fieldtype": "Currency",
+   "label": "Advance Required"
+  },
+  {
+   "fieldname": "col_break_money",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "advance_received",
+   "fieldtype": "Currency",
+   "label": "Advance Received",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_due",
+   "fieldtype": "Currency",
+   "label": "Balance Due",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "sec_payments",
+   "fieldtype": "Section Break",
+   "label": "Advances"
+  },
+  {
+   "description": "Holds advances until they are applied to the room folios at check-in.",
+   "fieldname": "booking_folio",
+   "fieldtype": "Link",
+   "label": "Booking Folio",
+   "no_copy": 1,
+   "options": "Guest Folio",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payments",
+   "fieldtype": "Table",
+   "label": "Payments",
+   "options": "Hotel Booking Payment",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "sec_other",
+   "fieldtype": "Section Break",
+   "label": "Other"
+  },
+  {
+   "depends_on": "eval:['Cancelled','No Show'].includes(doc.status)",
+   "fieldname": "cancellation_charge",
+   "fieldtype": "Currency",
+   "label": "Cancellation Charge"
+  },
+  {
+   "fieldname": "special_requests",
+   "fieldtype": "Small Text",
+   "label": "Special Requests"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Hotel Booking",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-03 02:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hospitality Core",
+ "name": "Hotel Booking",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hospitality Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hotel Sales Agent",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hospitality User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "guest_name,mobile_no,status,arrival_date",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "guest_name",
+ "track_changes": 1
+}

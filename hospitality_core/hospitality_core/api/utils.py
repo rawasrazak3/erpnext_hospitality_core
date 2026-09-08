@@ -184,3 +184,38 @@ def get_tax_breakdown(total_amount, gst_rate=None):
         "total_amount": total_amount,
         "gst_rate": gst_rate,
     }
+
+
+# Item codes that move money between folios rather than earning it.
+#
+# These are NOT revenue and must be excluded from every revenue query. The existing
+# predicate `reference_doctype != 'Payment Entry' OR reference_doctype IS NULL` does not
+# catch them: transfers carry no Payment Entry reference, so the `IS NULL` branch lets
+# them straight through and they were being counted as sales. `Room Only Sales` and
+# `Hotel Performance Analytics` happened to be safe only because they filter by item
+# code, which is why those two disagreed with the EOD report for the same date.
+NON_REVENUE_ITEM_CODES = (
+    "PAYMENT",
+    "REFUND",
+    "TRANSFER",
+    "TRANSFER-GROUP",
+    "REFUND-TRANSFER",
+    "BALANCE-TRANSFER",
+    "ADVANCE-TRANSFER",
+)
+
+
+def revenue_item_filter(alias="ft"):
+    """SQL fragment excluding money movements from a Folio Transaction revenue query.
+
+    Usage:
+        WHERE ... {filter}
+    with `.format(filter=revenue_item_filter("ft"))`.
+    """
+    prefix = f"{alias}." if alias else ""
+    codes = ", ".join(f"'{code}'" for code in NON_REVENUE_ITEM_CODES)
+    return (
+        f"AND ({prefix}reference_doctype != 'Payment Entry' "
+        f"OR {prefix}reference_doctype IS NULL) "
+        f"AND IFNULL({prefix}item, '') NOT IN ({codes})"
+    )

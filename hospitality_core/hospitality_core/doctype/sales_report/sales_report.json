@@ -18,9 +18,9 @@
   "total_actual_amount",
   "total_difference",
   "column_break_kpi",
-  "vat_amount",
-  "service_charge",
-  "consumption_tax",
+  "cgst_amount",
+  "sgst_amount",
+  "total_tax",
   "net_sales",
   "total_transactions",
   "cashiers",
@@ -108,21 +108,21 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "vat_amount",
+   "fieldname": "cgst_amount",
    "fieldtype": "Currency",
-   "label": "VAT (7.5%)",
+   "label": "CGST",
    "read_only": 1
   },
   {
-   "fieldname": "service_charge",
+   "fieldname": "sgst_amount",
    "fieldtype": "Currency",
-   "label": "Service Charge (10%)",
+   "label": "SGST",
    "read_only": 1
   },
   {
-   "fieldname": "consumption_tax",
+   "fieldname": "total_tax",
    "fieldtype": "Currency",
-   "label": "Consumption Tax (5%)",
+   "label": "Total Tax",
    "read_only": 1
   },
   {

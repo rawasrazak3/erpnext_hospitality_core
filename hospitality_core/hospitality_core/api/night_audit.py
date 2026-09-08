@@ -43,43 +43,83 @@ def run_daily_audit():
 
 def cancel_no_shows(posting_date):
     """
-    Cancels all reservations where:
-    - status = 'Reserved' (not yet checked in)
-    - arrival_date < today (arrival date has already passed)
-    Also cancels the linked folio if it exists.
+    Handles reservations where the arrival date has passed and the guest never checked in.
+
+    A reservation with money against it is marked "No Show" and LEFT ALONE, because
+    cancelling it would strand the guest's advance:
+
+      * This used to force `status = "Cancelled"` with raw `db.set_value`, which skips
+        `HotelReservation.process_cancel()` entirely — so the credit-rescue logic that
+        writes a Guest Balance Ledger row and a REFUND-TRANSFER never ran. A prepaid
+        guest who did not arrive lost the audit trail, and the money sat invisible on a
+        cancelled folio with no way to refund it.
+      * Unpaid reservations are still cancelled, but now through `process_cancel()` so
+        every cancellation takes the same, tested path.
+
+    A "No Show" is a commercial decision (cancellation policy, partial refund, date
+    change), so it is deliberately left for a human rather than auto-resolved here.
     """
     no_shows = frappe.get_all("Hotel Reservation",
         filters={
-            "status": "Reserved",
+            "status": ["in", ["Tentative", "Reserved"]],
             "arrival_date": ["<", posting_date]
         },
-        fields=["name", "folio", "room", "guest", "arrival_date"]
+        fields=["name", "folio", "room", "guest", "arrival_date", "hotel_booking"]
     )
 
     cancelled_count = 0
+    no_show_count = 0
+
     for res in no_shows:
         try:
-            frappe.db.set_value("Hotel Reservation", res.name, "status", "Cancelled")
+            if _has_money_against_it(res):
+                doc = frappe.get_doc("Hotel Reservation", res.name)
+                doc.db_set("status", "No Show")
+                if res.room:
+                    frappe.db.set_value("Hotel Room", res.room, "status", "Available")
+                doc.add_comment("Info", _(
+                    "Marked No Show (Night Audit): guest did not arrive on {0}. "
+                    "An advance was received, so this reservation was NOT cancelled — "
+                    "apply the cancellation policy and refund or transfer the balance."
+                ).format(res.arrival_date))
+                no_show_count += 1
+                continue
 
-            # Cancel linked folio if it exists and is not already closed/cancelled
-            if res.folio:
-                folio_status = frappe.db.get_value("Guest Folio", res.folio, "status")
-                if folio_status not in ["Closed", "Cancelled"]:
-                    frappe.db.set_value("Guest Folio", res.folio, "status", "Cancelled")
-
-            # Add a system comment
+            # No money involved: cancel through the real state machine.
             doc = frappe.get_doc("Hotel Reservation", res.name)
-            doc.add_comment("Info", _("Auto-Cancelled (Night Audit): Guest did not arrive. Arrival date was {0}.").format(res.arrival_date))
-
+            doc.process_cancel()
+            doc.add_comment("Info", _(
+                "Auto-Cancelled (Night Audit): guest did not arrive. Arrival date was {0}."
+            ).format(res.arrival_date))
             cancelled_count += 1
+
         except Exception as e:
             frappe.log_error(
-                f"No-Show Cancellation Error for {res.name}: {str(e)}",
+                f"No-Show handling error for {res.name}: {str(e)}",
                 f"Night Audit No-Show Error: {res.name}"
             )
 
-    if cancelled_count > 0:
+    if cancelled_count:
         frappe.msgprint(_("Night Audit: Auto-cancelled {0} no-show reservation(s).").format(cancelled_count))
+    if no_show_count:
+        frappe.msgprint(_("Night Audit: {0} prepaid reservation(s) marked No Show for review.").format(no_show_count))
+
+
+def _has_money_against_it(res):
+    """True if cancelling this reservation would strand money."""
+    if res.get("hotel_booking"):
+        if flt(frappe.db.get_value("Hotel Booking", res.hotel_booking, "advance_received")) > 0.01:
+            return True
+
+    if not res.get("folio"):
+        return False
+
+    # Any non-void payment or credit already on the folio.
+    total = frappe.db.sql("""
+        SELECT SUM(amount) FROM `tabFolio Transaction`
+        WHERE parent = %s AND is_void = 0
+    """, (res.folio,))[0][0]
+    return flt(total) < -0.01
 
 def process_single_reservation(res, posting_date):
     # Step A: Handle overstay FIRST — regardless of whether we will bill today.
@@ -119,17 +159,39 @@ def get_room_rent_item_codes():
     return frappe.db.sql_list("SELECT name FROM `tabItem` WHERE item_code='ROOM-RENT' OR item_group='Accommodation'")
 
 def handle_overstay(res):
+    """Extend a guest who is still in-house past their departure date.
+
+    The extension bypasses validation by design (the guest is physically in the room),
+    but that means it can silently overlap an incoming reservation for the same room.
+    Check first and flag the clash for the front desk rather than creating a double
+    booking nobody notices until the next guest is standing at the counter.
+    """
+    from hospitality_core.hospitality_core.api.availability import is_room_free
+
     new_departure = add_days(nowdate(), 1)
-    # Use db.set_value to skip validation when auto-extending overstays
-    # This prevents conflicts with other reservations in the same room
+
+    clash = is_room_free(
+        res.room, nowdate(), new_departure, ignore_reservation=res.name
+    )
+
     frappe.db.set_value("Hotel Reservation", res.name, {
         "departure_date": new_departure,
         "departure_time": "12:00:00",
         "_user_tags": "Overstay"
     })
-    # Add system comment to track the extension
+
     doc = frappe.get_doc("Hotel Reservation", res.name)
-    doc.add_comment("Info", _("Auto-Extended: Guest still in-house at 2 PM."))
+    if clash.get("free"):
+        doc.add_comment("Info", _("Auto-Extended: Guest still in-house at 2 PM."))
+    else:
+        doc.add_comment("Info", _(
+            "Auto-Extended: guest still in-house at 2 PM, but room {0} is also booked — "
+            "{1}. Move one of the two."
+        ).format(res.room, clash.get("reason")))
+        frappe.log_error(
+            f"Overstay on {res.name} clashes with {clash.get('reservation')} in room {res.room}",
+            "Night Audit overstay clash",
+        )
 
 def get_rate(rate_plan, room_type, date):
     if not rate_plan:

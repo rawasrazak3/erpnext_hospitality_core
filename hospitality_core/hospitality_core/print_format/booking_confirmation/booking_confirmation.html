@@ -1,0 +1,151 @@
+{#- The Jinja sandbox exposes only a subset of the frappe API: get_single is not in it,
+    so read the Single's fields individually through db.get_single_value. -#}
+{%- set company = frappe.db.get_single_value("Hospitality Accounting Settings", "company") -%}
+{%- set hotel = frappe.db.get_single_value("Hospitality Accounting Settings", "hotel_name") or company or "" -%}
+{%- set check_in_time = frappe.db.get_single_value("Hospitality Accounting Settings", "standard_check_in_time") -%}
+{%- set check_out_time = frappe.db.get_single_value("Hospitality Accounting Settings", "standard_check_out_time") -%}
+{%- set ccy = frappe.db.get_value("Company", company, "default_currency") if company else None -%}
+
+<div class="booking-voucher">
+	<style>
+		.booking-voucher { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1a1a1a; font-size: 12px; }
+		.bv-head { display: flex; justify-content: space-between; align-items: flex-start;
+			border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; margin-bottom: 18px; }
+		.bv-hotel { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+		.bv-sub { color: #666; font-size: 11px; margin-top: 3px; }
+		.bv-title { text-align: right; }
+		.bv-title .t { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+		.bv-title .n { font-family: monospace; font-size: 14px; margin-top: 4px; }
+		.bv-status { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10px;
+			font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 5px; }
+		.bv-confirmed { background: #e7f6ec; color: #1e7a43; }
+		.bv-tentative { background: #fdf3e0; color: #a8690f; }
+		.bv-other     { background: #eee; color: #555; }
+		.bv-grid { display: flex; gap: 28px; margin-bottom: 18px; }
+		.bv-col { flex: 1; }
+		.bv-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #888; margin-bottom: 3px; }
+		.bv-val { font-size: 13px; font-weight: 600; margin-bottom: 11px; }
+		table.bv-rooms { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+		table.bv-rooms th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
+			color: #888; border-bottom: 1px solid #ccc; padding: 6px 8px; font-weight: 600; }
+		table.bv-rooms td { padding: 7px 8px; border-bottom: 1px solid #eee; }
+		table.bv-rooms .num { text-align: right; }
+		.bv-money { width: 260px; margin-left: auto; }
+		.bv-money div { display: flex; justify-content: space-between; padding: 4px 0; }
+		.bv-money .total { border-top: 1px solid #ccc; margin-top: 4px; padding-top: 7px; font-weight: 700; }
+		.bv-money .due { font-size: 15px; font-weight: 700; }
+		.bv-note { margin-top: 22px; padding-top: 12px; border-top: 1px solid #eee; color: #666; font-size: 10px; line-height: 1.7; }
+	</style>
+
+	<div class="bv-head">
+		<div>
+			<div class="bv-hotel">{{ hotel }}</div>
+			{%- if doc.hotel_reception %}<div class="bv-sub">{{ doc.hotel_reception }}</div>{% endif -%}
+		</div>
+		<div class="bv-title">
+			<div class="t">Booking Confirmation</div>
+			<div class="n">{{ doc.name }}</div>
+			<span class="bv-status {% if doc.status == 'Confirmed' %}bv-confirmed{% elif doc.status == 'Tentative' %}bv-tentative{% else %}bv-other{% endif %}">{{ doc.status }}</span>
+		</div>
+	</div>
+
+	<div class="bv-grid">
+		<div class="bv-col">
+			<div class="bv-label">Guest</div>
+			<div class="bv-val">{{ doc.guest_name or doc.guest or "" }}</div>
+			{%- if doc.mobile_no %}
+			<div class="bv-label">Mobile</div>
+			<div class="bv-val">{{ doc.mobile_no }}</div>
+			{% endif -%}
+		</div>
+		<div class="bv-col">
+			<div class="bv-label">Arrival</div>
+			<div class="bv-val">{{ frappe.format(doc.arrival_date, {"fieldtype": "Date"}) }}
+				{%- if doc.arrival_time %} &middot; {{ doc.arrival_time }}{% endif %}</div>
+			<div class="bv-label">Departure</div>
+			<div class="bv-val">{{ frappe.format(doc.departure_date, {"fieldtype": "Date"}) }}
+				{%- if doc.departure_time %} &middot; {{ doc.departure_time }}{% endif %}</div>
+		</div>
+		<div class="bv-col">
+			<div class="bv-label">Nights</div>
+			<div class="bv-val">{{ doc.nights or 0 }}</div>
+			<div class="bv-label">Guests</div>
+			<div class="bv-val">{{ doc.adults or 0 }} adult{% if (doc.adults or 0) != 1 %}s{% endif %}{% if doc.children %}, {{ doc.children }} child{% if doc.children != 1 %}ren{% endif %}{% endif %}</div>
+		</div>
+	</div>
+
+	<table class="bv-rooms">
+		<thead>
+			<tr>
+				<th style="width:34%">Room Type</th>
+				<th style="width:16%">Room</th>
+				<th style="width:12%" class="num">Nights</th>
+				<th style="width:18%" class="num">Rate / Night</th>
+				<th style="width:20%" class="num">Amount</th>
+			</tr>
+		</thead>
+		<tbody>
+			{%- for row in doc.rooms %}
+			<tr>
+				<td>{{ row.room_type or "" }}</td>
+				<td>{{ row.room or "To be assigned" }}</td>
+				<td class="num">{{ row.nights or doc.nights or 0 }}</td>
+				<td class="num">{{ frappe.utils.fmt_money(row.rate, currency=ccy) }}</td>
+				<td class="num">{{ frappe.utils.fmt_money(row.amount, currency=ccy) }}</td>
+			</tr>
+			{% endfor -%}
+		</tbody>
+	</table>
+
+	<div class="bv-money">
+		<div><span>Total</span><span>{{ frappe.utils.fmt_money(doc.total_amount, currency=ccy) }}</span></div>
+		<div><span>Advance received</span><span>&minus; {{ frappe.utils.fmt_money(doc.advance_received, currency=ccy) }}</span></div>
+		<div class="total due"><span>Balance due on arrival</span><span>{{ frappe.utils.fmt_money(doc.balance_due, currency=ccy) }}</span></div>
+	</div>
+
+	{%- if doc.payments %}
+	<table class="bv-rooms" style="margin-top:18px">
+		<thead>
+			<tr>
+				<th style="width:20%">Payment Date</th>
+				<th style="width:20%">Type</th>
+				<th style="width:25%">Mode</th>
+				<th style="width:20%">Reference</th>
+				<th style="width:15%" class="num">Amount</th>
+			</tr>
+		</thead>
+		<tbody>
+			{%- for p in doc.payments %}
+			<tr>
+				<td>{{ frappe.format(p.posting_date, {"fieldtype": "Date"}) }}</td>
+				<td>{{ p.payment_type }}</td>
+				<td>{{ p.mode_of_payment or "" }}</td>
+				<td>{{ p.reference_no or "" }}</td>
+				<td class="num">{{ frappe.utils.fmt_money(p.amount, currency=ccy) }}</td>
+			</tr>
+			{% endfor -%}
+		</tbody>
+	</table>
+	{% endif -%}
+
+	{%- if doc.special_requests %}
+	<div style="margin-top:16px">
+		<div class="bv-label">Special Requests</div>
+		<div>{{ doc.special_requests }}</div>
+	</div>
+	{% endif -%}
+
+	<div class="bv-note">
+		{%- if doc.status == 'Tentative' and doc.hold_expiry %}
+		<b>This is a tentative hold.</b> The rooms are held until
+		{{ frappe.format(doc.hold_expiry, {"fieldtype": "Datetime"}) }} and are released automatically
+		after that unless the booking is confirmed.<br>
+		{% endif -%}
+		Standard check-in is from {{ check_in_time or "14:00" }} and check-out by
+		{{ check_out_time or "12:00" }}.
+		Rates are inclusive of applicable taxes. Please carry a valid photo ID for all adult guests.
+		{%- if doc.rooms and doc.rooms|selectattr("room", "none")|list %}
+		<br>Room numbers shown as &ldquo;To be assigned&rdquo; will be allocated on arrival.
+		{% endif -%}
+	</div>
+</div>

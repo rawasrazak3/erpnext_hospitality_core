@@ -1,0 +1,535 @@
+/* Hotel CRM sales console.
+ *
+ * Built on Frappe's own design tokens (--fg-color, --border-color, --text-muted, the
+ * --padding/--text-* scales) so the page inherits the active theme, including dark mode,
+ * instead of hardcoding a second palette that drifts from the desk.
+ *
+ * Inputs are real Frappe controls, so this file deliberately does NOT restyle
+ * .form-control — it only lays them out.
+ */
+
+.hcrm {
+	display: flex;
+	gap: var(--margin-sm, 8px);
+	height: calc(100vh - 145px);
+	min-height: 520px;
+	align-items: stretch;
+}
+
+.hcrm-pane {
+	background: var(--fg-color, #fff);
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius-md, 8px);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	min-height: 0;
+}
+
+.hcrm-queue { width: 310px; flex: 0 0 310px; }
+.hcrm-detail { flex: 1 1 auto; min-width: 0; }
+.hcrm-context { width: 280px; flex: 0 0 280px; }
+
+.hcrm-scroll { overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; min-height: 0; }
+
+.hcrm-pane-head {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--border-color);
+	font-size: var(--text-sm, 12px);
+	font-weight: 600;
+	color: var(--text-muted);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	letter-spacing: .02em;
+	text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ queue head */
+.hcrm-queue-head {
+	padding: 10px;
+	border-bottom: 1px solid var(--border-color);
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+}
+
+.hcrm-segmented {
+	display: flex;
+	background: var(--control-bg, var(--subtle-fg, #f4f5f6));
+	border-radius: var(--border-radius, 6px);
+	padding: 2px;
+	gap: 2px;
+}
+.hcrm-seg {
+	flex: 1 1 0;
+	border: 0;
+	background: transparent;
+	border-radius: var(--border-radius-sm, 4px);
+	padding: 4px 6px;
+	font-size: var(--text-sm, 12px);
+	font-weight: 500;
+	color: var(--text-muted);
+	cursor: pointer;
+	white-space: nowrap;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	transition: background .12s ease, color .12s ease;
+}
+.hcrm-seg:hover { color: var(--text-color); }
+.hcrm-seg.active {
+	background: var(--fg-color, #fff);
+	color: var(--text-color);
+	box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.08));
+}
+.hcrm-seg-count {
+	font-size: 10px;
+	font-weight: 600;
+	background: var(--fg-hover-color, rgba(0,0,0,.06));
+	border-radius: 999px;
+	padding: 0 5px;
+	min-width: 16px;
+}
+.hcrm-seg.active .hcrm-seg-count { background: var(--control-bg, #eef0f2); }
+
+.hcrm-search { position: relative; display: flex; align-items: center; }
+.hcrm-search .icon {
+	position: absolute;
+	left: 8px;
+	color: var(--text-muted);
+	pointer-events: none;
+}
+.hcrm-search input {
+	width: 100%;
+	padding: 5px 8px 5px 28px;
+	font-size: var(--text-md, 13px);
+	border: 1px solid transparent;
+	border-radius: var(--border-radius, 6px);
+	background: var(--control-bg, #f4f5f6);
+	color: var(--text-color);
+}
+.hcrm-search input:focus {
+	outline: none;
+	border-color: var(--primary, #2490ef);
+	background: var(--fg-color, #fff);
+}
+
+/* ------------------------------------------------------------------ queue rows */
+.hcrm-row {
+	display: flex;
+	gap: 9px;
+	align-items: flex-start;
+	padding: 9px 10px;
+	cursor: pointer;
+	border-bottom: 1px solid var(--border-color);
+	position: relative;
+}
+.hcrm-row:hover { background: var(--fg-hover-color, #f7f7f8); }
+.hcrm-row.active { background: var(--highlight-color, #f0f4f8); }
+.hcrm-row.active::before {
+	content: '';
+	position: absolute;
+	left: 0; top: 0; bottom: 0;
+	width: 2px;
+	background: var(--primary, #2490ef);
+}
+.hcrm-row-main { flex: 1 1 auto; min-width: 0; }
+.hcrm-row-top { display: flex; align-items: center; gap: 5px; }
+.hcrm-row-name {
+	font-weight: 600;
+	font-size: var(--text-md, 13px);
+	color: var(--text-color);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hcrm-row-meta {
+	font-size: var(--text-sm, 12px);
+	color: var(--text-muted);
+	margin-top: 1px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hcrm-row-foot {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 5px;
+	flex-wrap: wrap;
+}
+.hcrm-row-stay, .hcrm-row-amt {
+	font-size: 11px;
+	color: var(--text-muted);
+}
+.hcrm-row-amt { font-weight: 600; color: var(--text-color); }
+.hcrm-row-action { margin-top: 2px; }
+
+.hcrm-due-dot {
+	width: 6px; height: 6px;
+	border-radius: 50%;
+	background: var(--red-500, #e03131);
+	flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------------ avatar */
+.hcrm-avatar {
+	width: 30px; height: 30px;
+	flex: 0 0 30px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: .02em;
+}
+.hcrm-avatar-lg {
+	width: 42px; height: 42px;
+	flex: 0 0 42px;
+	font-size: 15px;
+}
+
+/* ------------------------------------------------------------------ pills / chips */
+.hcrm-pill, .hcrm-tag {
+	display: inline-block;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+	line-height: 1.6;
+}
+.hcrm-chip {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-muted);
+	background: var(--control-bg, #f4f5f6);
+	border-radius: 999px;
+	padding: 1px 7px;
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+.hcrm-c-gray   { background: var(--gray-100,   #f1f3f5); color: var(--gray-700,   #495057); }
+.hcrm-c-blue   { background: var(--blue-100,   #e7f5ff); color: var(--blue-600,   #1971c2); }
+.hcrm-c-green  { background: var(--green-100,  #ebfbee); color: var(--green-600,  #2f9e44); }
+.hcrm-c-red    { background: var(--red-100,    #fff5f5); color: var(--red-600,    #e03131); }
+.hcrm-c-orange { background: var(--orange-100, #fff4e6); color: var(--orange-600, #e8590c); }
+.hcrm-c-purple { background: var(--purple-100, #f3f0ff); color: var(--purple-600, #6741d9); }
+.hcrm-c-teal   { background: var(--teal-100,   #e6fcf5); color: var(--teal-600,   #0ca678); }
+.hcrm-c-pink   { background: var(--pink-100,   #fff0f6); color: var(--pink-600,   #c2255c); }
+.hcrm-c-yellow { background: var(--yellow-100, #fff9db); color: var(--yellow-700, #f08c00); }
+.hcrm-c-cyan   { background: var(--cyan-100,   #e3fafc); color: var(--cyan-700,   #0b7285); }
+
+.hcrm-call-in     { color: var(--green-600, #2f9e44); }
+.hcrm-call-out    { color: var(--blue-600, #1971c2); }
+.hcrm-call-missed { color: var(--red-600, #e03131); }
+.hcrm-avatar.hcrm-call-in     { background: var(--green-100, #ebfbee); }
+.hcrm-avatar.hcrm-call-out    { background: var(--blue-100, #e7f5ff); }
+.hcrm-avatar.hcrm-call-missed { background: var(--red-100, #fff5f5); }
+.hcrm-tag.hcrm-call-in     { background: var(--green-100, #ebfbee); }
+.hcrm-tag.hcrm-call-out    { background: var(--blue-100, #e7f5ff); }
+.hcrm-tag.hcrm-call-missed { background: var(--red-100, #fff5f5); }
+
+/* ------------------------------------------------------------------ detail */
+.hcrm-doc { display: flex; flex-direction: column; min-height: 100%; }
+
+.hcrm-doc-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 14px 16px;
+	border-bottom: 1px solid var(--border-color);
+	position: sticky;
+	top: 0;
+	background: var(--fg-color, #fff);
+	z-index: 3;
+}
+.hcrm-head-main { flex: 1 1 auto; min-width: 0; }
+.hcrm-head-title {
+	font-size: var(--text-xl, 18px);
+	font-weight: 600;
+	color: var(--text-color);
+	line-height: 1.3;
+}
+.hcrm-head-sub {
+	font-size: var(--text-sm, 12px);
+	color: var(--text-muted);
+	margin-top: 3px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.hcrm-sep { opacity: .4; }
+.hcrm-head-side { text-align: right; flex: 0 0 auto; }
+.hcrm-head-amt {
+	font-size: var(--text-lg, 15px);
+	font-weight: 600;
+	color: var(--text-color);
+}
+.hcrm-head-actions { display: flex; gap: 5px; justify-content: flex-end; margin-top: 5px; }
+
+.hcrm-body { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.hcrm-card {
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius-md, 8px);
+	padding: 12px 14px 4px;
+	background: var(--fg-color, #fff);
+}
+.hcrm-card-title {
+	font-size: var(--text-sm, 12px);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+	color: var(--text-muted);
+	margin-bottom: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 24px;
+}
+
+/* Four-column grid holding Frappe controls. The controls bring their own label and
+   input markup, so we only place them. */
+.hcrm-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 0 12px;
+}
+.hcrm-cell.span1 { grid-column: span 1; }
+.hcrm-cell.span2 { grid-column: span 2; }
+.hcrm-cell.span3 { grid-column: span 3; }
+.hcrm-cell.span4 { grid-column: span 4; }
+
+.hcrm-cell .frappe-control { margin-bottom: 10px; }
+.hcrm-cell .control-label {
+	font-size: var(--text-sm, 12px);
+	color: var(--text-muted);
+	margin-bottom: 3px;
+}
+.hcrm-cell .help-box { display: none; }
+
+/* ------------------------------------------------------------------ room lines */
+.hcrm-lines { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.hcrm-lines th {
+	text-align: left;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: .04em;
+	padding: 0 6px 6px;
+}
+.hcrm-lines td { padding: 3px 6px; vertical-align: middle; }
+.hcrm-lines .num { text-align: right; }
+.hcrm-lines tfoot td {
+	border-top: 1px solid var(--border-color);
+	padding-top: 9px;
+}
+.hcrm-total-label { color: var(--text-muted); font-size: var(--text-sm, 12px); }
+.hcrm-total { font-weight: 600; font-size: var(--text-lg, 15px); }
+.hcrm-line-amt { font-variant-numeric: tabular-nums; }
+.hcrm-line-del { text-align: center; }
+.hcrm-line-del .btn { color: var(--text-muted); padding: 2px 6px; }
+.hcrm-line-del .btn:hover { color: var(--red-600, #e03131); }
+
+/* ------------------------------------------------------------------ action bar */
+.hcrm-actionbar {
+	margin-top: auto;
+	position: sticky;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 10px 16px;
+	background: var(--fg-color, #fff);
+	border-top: 1px solid var(--border-color);
+	z-index: 2;
+}
+.hcrm-dirty {
+	margin-right: auto;
+	font-size: var(--text-sm, 12px);
+	color: var(--orange-600, #e8590c);
+}
+
+/* ------------------------------------------------------------------ timeline */
+.hcrm-timeline { padding: 10px 12px; }
+.hcrm-tl-item { display: flex; gap: 9px; padding-bottom: 12px; position: relative; }
+.hcrm-tl-item:not(:last-child)::before {
+	content: '';
+	position: absolute;
+	left: 4px; top: 14px; bottom: 0;
+	width: 1px;
+	background: var(--border-color);
+}
+.hcrm-tl-dot {
+	width: 9px; height: 9px;
+	border-radius: 50%;
+	background: currentColor;
+	margin-top: 4px;
+	flex: 0 0 9px;
+	z-index: 1;
+}
+.hcrm-tl-body { flex: 1 1 auto; min-width: 0; }
+.hcrm-tl-top {
+	display: flex;
+	justify-content: space-between;
+	gap: 6px;
+	font-size: var(--text-md, 13px);
+	font-weight: 600;
+}
+.hcrm-tl-dur { color: var(--text-muted); font-weight: 400; font-size: 11px; }
+.hcrm-tl-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+/* ------------------------------------------------------------------ empty / loading */
+.hcrm-empty {
+	text-align: center;
+	color: var(--text-muted);
+	padding: 48px 20px;
+}
+.hcrm-empty-title {
+	font-size: var(--text-md, 13px);
+	font-weight: 600;
+	color: var(--text-color);
+	margin-bottom: 3px;
+}
+.hcrm-empty-hint { font-size: var(--text-sm, 12px); }
+.hcrm-empty-sm { padding: 18px 12px; }
+
+.hcrm-skel {
+	height: 58px;
+	margin: 9px 10px;
+	border-radius: var(--border-radius, 6px);
+	background: linear-gradient(90deg,
+		var(--control-bg, #f4f5f6) 25%,
+		var(--fg-hover-color, #eceef0) 37%,
+		var(--control-bg, #f4f5f6) 63%);
+	background-size: 400% 100%;
+	animation: hcrm-shimmer 1.3s ease infinite;
+}
+@keyframes hcrm-shimmer {
+	0%   { background-position: 100% 50%; }
+	100% { background-position: 0 50%; }
+}
+
+/* ------------------------------------------------------------------ board */
+.hcrm-board {
+	display: flex;
+	gap: 10px;
+	overflow-x: auto;
+	height: calc(100vh - 145px);
+	padding-bottom: 8px;
+	align-items: flex-start;
+}
+.hcrm-col {
+	width: 258px;
+	flex: 0 0 258px;
+	background: var(--subtle-fg, #f7f7f8);
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius-md, 8px);
+	display: flex;
+	flex-direction: column;
+	max-height: 100%;
+}
+.hcrm-col-head {
+	padding: 9px 10px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	border-bottom: 1px solid var(--border-color);
+}
+.hcrm-col-body { overflow-y: auto; padding: 8px; flex: 1 1 auto; min-height: 80px; }
+.hcrm-card-mini {
+	background: var(--fg-color, #fff);
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius, 6px);
+	padding: 9px 10px;
+	margin-bottom: 7px;
+	cursor: grab;
+	box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.04));
+}
+.hcrm-card-mini:hover { border-color: var(--primary, #2490ef); }
+.hcrm-card-mini.dragging { opacity: .4; }
+.hcrm-col.drop-target {
+	outline: 2px dashed var(--primary, #2490ef);
+	outline-offset: -2px;
+	background: var(--highlight-color, #f0f4f8);
+}
+
+/* ------------------------------------------------------------------ responsive */
+@media (max-width: 1280px) {
+	.hcrm-context { display: none; }
+}
+@media (max-width: 1024px) {
+	.hcrm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.hcrm-cell.span3, .hcrm-cell.span4 { grid-column: span 2; }
+}
+@media (max-width: 860px) {
+	.hcrm { flex-direction: column; height: auto; }
+	.hcrm-queue { width: 100%; flex: 1 1 auto; max-height: 320px; }
+	.hcrm-detail { width: 100%; }
+	.hcrm-doc-head { position: static; }
+}
+
+/* Inline icons (see ICONS in hotel_crm.js — theme-independent, not sprite refs). */
+.hcrm-icon { width: 16px; height: 16px; flex: 0 0 auto; }
+.hcrm-icon-sm { width: 14px; height: 14px; }
+.hcrm-icon-lg { width: 28px; height: 28px; stroke-width: 1.4; }
+.hcrm-empty .hcrm-icon-lg { color: var(--text-light, #c0c4c8); margin-bottom: 10px; }
+
+/* ------------------------------------------------------------------ availability */
+.hcrm-avail { margin: 2px 0 12px; }
+.hcrm-avail-head {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+	color: var(--text-muted);
+	margin-bottom: 6px;
+}
+.hcrm-avail-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.hcrm-avail-cell {
+	flex: 1 1 90px;
+	min-width: 90px;
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius, 6px);
+	padding: 7px 9px;
+	text-align: center;
+	background: var(--fg-color, #fff);
+}
+.hcrm-avail-n { font-size: var(--text-xl, 18px); font-weight: 600; line-height: 1.1; }
+.hcrm-avail-t {
+	font-size: 11px;
+	color: var(--text-muted);
+	margin-top: 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hcrm-avail-need { font-size: 10px; margin-top: 3px; font-weight: 600; }
+
+/* Free-room count read at a glance: plenty, only one left, fewer than asked for, none. */
+.hcrm-avail-ok    .hcrm-avail-n { color: var(--green-600, #2f9e44); }
+.hcrm-avail-low   .hcrm-avail-n { color: var(--orange-600, #e8590c); }
+.hcrm-avail-short { border-color: var(--red-500, #e03131); }
+.hcrm-avail-short .hcrm-avail-n,
+.hcrm-avail-short .hcrm-avail-need { color: var(--red-600, #e03131); }
+.hcrm-avail-none  { background: var(--red-100, #fff5f5); border-color: var(--red-300, #ffc9c9); }
+.hcrm-avail-none  .hcrm-avail-n { color: var(--red-600, #e03131); }
+
+.hcrm-avail-loading {
+	font-size: var(--text-sm, 12px);
+	color: var(--text-muted);
+	padding: 8px 0 12px;
+}
+
+.hcrm-booking-state {
+	font-size: var(--text-sm, 12px);
+	margin-right: 8px;
+}

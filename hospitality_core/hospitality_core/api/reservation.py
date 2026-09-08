@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import getdate, date_diff, nowdate
+from frappe.utils import getdate, date_diff, nowdate, get_time
 from datetime import datetime, time as dt_time
 
 
@@ -9,19 +9,29 @@ def _make_datetime(date_val, time_val, default_time="14:00:00"):
     Combine a Date and a Time field into a full datetime for accurate overlap comparison.
     Falls back to `default_time` (e.g. '14:00:00' for check-in, '12:00:00' for check-out)
     when time_val is None or empty.
+
+    Parsing goes through frappe.utils.get_time, which accepts every shape a Time field
+    can actually hold: a string, a datetime.time, or a timedelta. Splitting on ":" and
+    calling int() on the parts does not — Frappe stamps a new document's Time fields with
+    the current time at microsecond precision ("01:02:22.569617"), so int("22.569617")
+    raised ValueError on every reservation created without an explicit arrival time.
     """
     d = getdate(date_val)
-    if time_val:
-        ts = str(time_val).strip()
-        parts = ts.split(":")
-        h = int(parts[0]) if len(parts) > 0 else 0
-        m = int(parts[1]) if len(parts) > 1 else 0
-        s = int(parts[2]) if len(parts) > 2 else 0
-        t = dt_time(h, m, s)
-    else:
-        parts = default_time.split(":")
-        t = dt_time(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
+    t = _coerce_time(time_val) or _coerce_time(default_time) or dt_time(14, 0, 0)
     return datetime.combine(d, t)
+
+
+def _coerce_time(value):
+    """Return a datetime.time for anything a Time field may hold, else None."""
+    if value in (None, ""):
+        return None
+    try:
+        parsed = get_time(value)
+    except Exception:
+        return None
+    # Times are compared to the minute in booking logic; drop microseconds so two
+    # equivalent moments never sort differently.
+    return parsed.replace(microsecond=0) if parsed else None
 
 
 @frappe.whitelist()

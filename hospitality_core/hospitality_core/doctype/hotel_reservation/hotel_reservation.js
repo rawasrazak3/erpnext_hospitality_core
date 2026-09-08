@@ -142,6 +142,62 @@ frappe.ui.form.on('Hotel Reservation', {
         set_reservation_read_only_state(frm);
 
         // ROOM MOVE BUTTON
+        // Extend Stay — the planned counterpart to the night audit's overstay handler,
+        // which only fires at 2 PM and cannot be used to agree an extra night at the desk.
+        if (['Reserved', 'Checked In'].includes(frm.doc.status)) {
+            frm.add_custom_button(__('Extend Stay'), function () {
+                const d = new frappe.ui.Dialog({
+                    title: __('Extend Stay'),
+                    fields: [
+                        {
+                            fieldname: 'current',
+                            fieldtype: 'HTML',
+                            options: `<p class="text-muted small">${__('Currently departing {0}.', [
+                                frappe.datetime.str_to_user(frm.doc.departure_date),
+                            ])}</p>`,
+                        },
+                        {
+                            label: __('New Departure Date'),
+                            fieldname: 'new_departure_date',
+                            fieldtype: 'Date',
+                            reqd: 1,
+                            default: frappe.datetime.add_days(frm.doc.departure_date, 1),
+                        },
+                    ],
+                    primary_action_label: __('Extend'),
+                    primary_action: function (values) {
+                        d.hide();
+                        frm.call({
+                            method: 'hospitality_core.hospitality_core.doctype.hotel_reservation.hotel_reservation.extend_stay',
+                            args: {
+                                reservation: frm.doc.name,
+                                new_departure_date: values.new_departure_date,
+                            },
+                            freeze: true,
+                            callback: function (r) {
+                                if (r.message) {
+                                    frappe.show_alert({
+                                        message: __('Stay extended to {0}', [
+                                            frappe.datetime.str_to_user(r.message.departure_date),
+                                        ]),
+                                        indicator: 'green',
+                                    });
+                                }
+                                frm.reload_doc();
+                            },
+                        });
+                    },
+                });
+                d.show();
+            });
+        }
+
+        if (frm.doc.hotel_booking) {
+            frm.add_custom_button(__('Booking'), function () {
+                frappe.set_route('Form', 'Hotel Booking', frm.doc.hotel_booking);
+            });
+        }
+
         let can_move_room = frappe.user_roles.includes('Frontdesk Supervisor') ||
             frappe.session.user === 'Administrator';
 

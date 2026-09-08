@@ -28,9 +28,9 @@ def get_columns(filters):
 		{"label": _("Avg Daily Expense"), "fieldname": "avg_expense", "fieldtype": "Currency", "options": "currency", "width": 120},
 		{"label": _("Gross Revenue (Inclusive)"), "fieldname": "revenue", "fieldtype": "Currency", "options": "currency", "width": 150},
 		{"label": _("Net Revenue"), "fieldname": "net_revenue", "fieldtype": "Currency", "options": "currency", "width": 140},
-		{"label": _("Consumption Tax (5%)"), "fieldname": "ct_amount", "fieldtype": "Currency", "options": "currency", "width": 140},
-		{"label": _("VAT (7.5%)"), "fieldname": "vat_amount", "fieldtype": "Currency", "options": "currency", "width": 140},
-		{"label": _("Service Charge (10%)"), "fieldname": "sc_amount", "fieldtype": "Currency", "options": "currency", "width": 140},
+		{"label": _("CGST"), "fieldname": "cgst_amount", "fieldtype": "Currency", "options": "currency", "width": 140},
+		{"label": _("SGST"), "fieldname": "sgst_amount", "fieldtype": "Currency", "options": "currency", "width": 140},
+		{"label": _("Total Tax"), "fieldname": "total_tax", "fieldtype": "Currency", "options": "currency", "width": 140},
 		{"label": _("Total Expenses (Buying Amount)"), "fieldname": "expenses", "fieldtype": "Currency", "options": "currency", "width": 150},
 		{"label": _("Gross Profit (Net Rev - Exp)"), "fieldname": "gross_profit", "fieldtype": "Currency", "options": "currency", "width": 150},
 		{"label": _("Gross Profit %"), "fieldname": "gross_profit_pct", "fieldtype": "Percent", "width": 120},
@@ -65,6 +65,7 @@ def get_data(filters):
 			ft.posting_date BETWEEN %s AND %s
 			AND ft.is_void = 0
 			AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
+				AND IFNULL(ft.item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
 			AND gf.docstatus < 2
 	"""
 	
@@ -190,9 +191,9 @@ def get_data(filters):
 		# Apply Tax Breakdown
 		taxes = get_tax_breakdown(val["revenue"])
 		val["net_revenue"] = taxes["net_amount"]
-		val["ct_amount"] = taxes["ct_amount"]
-		val["vat_amount"] = taxes["vat_amount"]
-		val["sc_amount"] = taxes["sc_amount"]
+		val["cgst_amount"] = taxes["cgst_amount"]
+		val["sgst_amount"] = taxes["sgst_amount"]
+		val["total_tax"] = taxes["total_tax"]
 		
 		val["gross_profit"] = val["net_revenue"] - val["expenses"]
 		val["gross_profit_pct"] = (val["gross_profit"] / val["net_revenue"] * 100.0) if val["net_revenue"] else 0

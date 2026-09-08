@@ -72,3 +72,72 @@
 .btn-book:active:not(:disabled){transform:translateY(0)}
 #guest-link-wrapper .frappe-control{margin:0}
 #guest-link-wrapper .frappe-control .link-field .link-btn{top:3px}
+
+/* ------------------------------------------------------------------ arrivals mode
+   Pulling in a booking the sales team made earlier, with its advance already paid. */
+.hpos-modes { margin-left: auto; display: flex; gap: 4px; }
+.hpos-mode {
+	border: 1px solid var(--border-color, #e2e8f0);
+	background: var(--fg-color, #fff);
+	border-radius: 6px;
+	padding: 5px 12px;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	color: var(--text-muted, #64748b);
+}
+.hpos-mode.active {
+	background: var(--primary, #2490ef);
+	border-color: var(--primary, #2490ef);
+	color: #fff;
+}
+
+.hpos-arrivals { padding: 4px 0; }
+.hpos-arr-search { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.hpos-arr-search input { flex: 1 1 160px; padding: 6px 10px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 6px; }
+.hpos-arr-search input[type="date"] { flex: 0 0 150px; }
+
+.arr-row {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	padding: 10px 12px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 8px;
+	margin-bottom: 7px;
+	cursor: pointer;
+	background: var(--fg-color, #fff);
+}
+.arr-row:hover { border-color: var(--primary, #2490ef); }
+.arr-row.active { border-color: var(--primary, #2490ef); box-shadow: 0 0 0 2px rgba(36,144,239,.15); }
+.arr-main { flex: 1 1 auto; min-width: 0; }
+.arr-name { font-weight: 600; font-size: 14px; }
+.arr-meta { font-size: 12px; color: var(--text-muted, #64748b); margin-top: 2px; }
+.arr-side { text-align: right; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
+
+.arr-status { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.arr-confirmed { background: #ebfbee; color: #2f9e44; }
+.arr-tentative { background: #fff9db; color: #f08c00; }
+.arr-walkin    { background: #e7f5ff; color: #1971c2; }
+.arr-adv { font-size: 11px; font-weight: 600; color: #2f9e44; }
+.arr-due { font-size: 11px; color: #e03131; }
+
+.arr-lines { margin-bottom: 10px; }
+.arr-line {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 0;
+	border-bottom: 1px solid var(--border-color, #eef0f2);
+	font-size: 13px;
+}
+.arr-room-fixed { font-weight: 600; }
+.arr-room-none { color: #e03131; font-size: 12px; }
+.arr-room-pick { padding: 3px 6px; border: 1px solid var(--border-color, #e2e8f0); border-radius: 5px; }
+.arr-tag { font-size: 10px; background: #f1f3f5; color: #495057; padding: 1px 6px; border-radius: 999px; }
+.arr-note { font-size: 12px; color: var(--text-muted, #64748b); font-style: italic; margin-bottom: 10px; }
+
+.arr-money { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+.arr-money-adv { color: #2f9e44; font-weight: 600; }
+.arr-money-due { border-top: 1px solid var(--border-color, #eef0f2); margin-top: 5px; padding-top: 8px; font-weight: 600; font-size: 15px; }

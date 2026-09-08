@@ -13,6 +13,7 @@
         "receivable_account",
         "income_suspense_account",
         "income_account",
+        "advance_liability_account",
         "section_break_gst",
         "default_gst_rate",
         "enable_igst",
@@ -90,6 +91,13 @@
             "label": "Income Account",
             "options": "Account",
             "reqd": 1
+        },
+        {
+            "fieldname": "advance_liability_account",
+            "fieldtype": "Link",
+            "label": "Advance Liability Account",
+            "options": "Account",
+            "description": "Liability account holding advances received for future stays. Money sits here until the guest checks in and the advance is applied to the room folio, so an advance never recognises revenue in the period it was collected."
         },
         {
             "fieldname": "section_break_gst",

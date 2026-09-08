@@ -3,6 +3,7 @@
 
 import frappe
 from frappe import _
+from frappe.utils import flt
 
 def execute(filters=None):
 	columns = get_columns()
@@ -115,6 +116,7 @@ def get_data(filters):
 				AND ft.is_void = 0
 				AND gf.docstatus < 2
 				AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
+				AND IFNULL(ft.item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
 		""", (report_date, reception))[0][0] or 0.0
 	else:
 		sales_consumption = frappe.db.sql("""
@@ -126,6 +128,7 @@ def get_data(filters):
 				AND ft.is_void = 0
 				AND gf.docstatus < 2
 				AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
+				AND IFNULL(ft.item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
 		""", (report_date,))[0][0] or 0.0
 
 	data.append({
@@ -144,46 +147,68 @@ def get_data(filters):
 		"value": frappe.format_value(sales_taxes["net_amount"], currency=company_currency),
 		"description": "Base revenue before taxes."
 	})
+	half_rate = flt(sales_taxes["gst_rate"]) / 2
 	data.append({
-		"metric": "  - Consumption Tax (5%)",
-		"value": frappe.format_value(sales_taxes["ct_amount"], currency=company_currency),
-		"description": "5% Consumption Tax deduction."
+		"metric": f"  - CGST ({half_rate:g}%)",
+		"value": frappe.format_value(sales_taxes["cgst_amount"], currency=company_currency),
+		"description": "Central GST component of the gross amount."
 	})
 	data.append({
-		"metric": "  - VAT (7.5%)",
-		"value": frappe.format_value(sales_taxes["vat_amount"], currency=company_currency),
-		"description": "7.5% VAT deduction."
+		"metric": f"  - SGST ({half_rate:g}%)",
+		"value": frappe.format_value(sales_taxes["sgst_amount"], currency=company_currency),
+		"description": "State GST component of the gross amount."
 	})
 	data.append({
-		"metric": "  - Service Charge (10%)",
-		"value": frappe.format_value(sales_taxes["sc_amount"], currency=company_currency),
-		"description": "10% Service Charge deduction."
+		"metric": "  - Total Tax",
+		"value": frappe.format_value(sales_taxes["total_tax"], currency=company_currency),
+		"description": "CGST + SGST."
 	})
 
 	# 5. Payment
-	# Sum of Payment Entries for this reception on this date.
+	# Front-desk collections for this reception on this date.
+	#
+	# This MUST stay scoped to payments that actually hit a Guest Folio. Without the
+	# `guest_folio IS NOT NULL` filter this summed every Payment Entry in the system —
+	# supplier payments, POS consolidation entries and all — and reported them as
+	# front-desk cash. Refunds ("Pay") are netted off rather than added.
+	payment_conditions = ["pe.posting_date = %(report_date)s", "pe.docstatus = 1", "pe.guest_folio IS NOT NULL"]
+	params = {"report_date": report_date}
 	if reception:
-		payments = frappe.db.sql("""
-			SELECT SUM(paid_amount)
-			FROM `tabPayment Entry`
-			WHERE
-				posting_date = %s
-				AND hotel_reception = %s
-				AND docstatus = 1
-		""", (report_date, reception))[0][0] or 0.0
-	else:
-		payments = frappe.db.sql("""
-			SELECT SUM(paid_amount)
-			FROM `tabPayment Entry`
-			WHERE
-				posting_date = %s
-				AND docstatus = 1
-		""", (report_date,))[0][0] or 0.0
+		payment_conditions.append("pe.hotel_reception = %(reception)s")
+		params["reception"] = reception
+
+	# Split in-house settlement from advances taken for a FUTURE stay. Both are cash in
+	# the drawer today, but only the first relates to revenue earned today — reporting
+	# them as one number is what made an advance look like same-day trading.
+	rows = frappe.db.sql("""
+		SELECT IFNULL(gf.is_booking_master, 0) AS is_advance,
+		       SUM(CASE WHEN pe.payment_type = 'Pay' THEN -pe.paid_amount ELSE pe.paid_amount END) AS amt
+		FROM `tabPayment Entry` pe
+		JOIN `tabGuest Folio` gf ON gf.name = pe.guest_folio
+		WHERE {conditions}
+		GROUP BY IFNULL(gf.is_booking_master, 0)
+	""".format(conditions=" AND ".join(payment_conditions)), params, as_dict=True)
+
+	in_house = sum(flt(r.amt) for r in rows if not r.is_advance)
+	advances = sum(flt(r.amt) for r in rows if r.is_advance)
+	payments = in_house + advances
+
+	company_ccy = frappe.get_cached_value('Company', frappe.defaults.get_user_default("Company"), "default_currency")
 
 	data.append({
-		"metric": "Total Payments",
-		"value": frappe.format_value(payments, currency=frappe.get_cached_value('Company',  frappe.defaults.get_user_default("Company"),  "default_currency")),
-		"description": "Total payments collected at this reception."
+		"metric": "Total Collections",
+		"value": frappe.format_value(payments, currency=company_ccy),
+		"description": "All cash collected at this reception today (in-house + advances)."
+	})
+	data.append({
+		"metric": "  - In-House Settlement",
+		"value": frappe.format_value(in_house, currency=company_ccy),
+		"description": "Paid against a stay in progress. Relates to revenue earned."
+	})
+	data.append({
+		"metric": "  - Advances (Future Stays)",
+		"value": frappe.format_value(advances, currency=company_ccy),
+		"description": "Collected today for a stay that has not happened yet. Held as a liability, NOT revenue."
 	})
 
 	# 6. Analytics

@@ -73,6 +73,7 @@ def get_adr_trend(from_date, to_date):
 			SELECT SUM(amount) FROM `tabFolio Transaction`
 			WHERE posting_date = %s AND is_void = 0
 			AND (reference_doctype != 'Payment Entry' OR reference_doctype IS NULL)
+			AND IFNULL(item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
 		""", (d_str,))[0][0] or 0
 		
 		# Occupied rooms for the day
@@ -102,6 +103,7 @@ def get_revpar_trend(from_date, to_date):
 			SELECT SUM(amount) FROM `tabFolio Transaction`
 			WHERE posting_date = %s AND is_void = 0
 			AND (reference_doctype != 'Payment Entry' OR reference_doctype IS NULL)
+			AND IFNULL(item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
 		""", (d_str,))[0][0] or 0
 		
 		dates.append(d_str)
@@ -137,6 +139,7 @@ def get_revenue_expense_trend(from_date, to_date):
 			SELECT SUM(amount) FROM `tabFolio Transaction`
 			WHERE posting_date = %s AND is_void = 0
 			AND (reference_doctype != 'Payment Entry' OR reference_doctype IS NULL)
+			AND IFNULL(item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
 		""", (d_str,))[0][0] or 0
 		
 		exp = flt(frappe.db.get_value("Hospitality Expense", {"expense_date": d_str, "docstatus": 1}, "SUM(grand_total)"))
@@ -177,6 +180,7 @@ def get_sales_by_reception(from_date, to_date):
 		WHERE ft.posting_date BETWEEN %s AND %s 
 		AND ft.is_void = 0 
 		AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
+				AND IFNULL(ft.item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
 		GROUP BY room.hotel_reception
 	""", (from_date, to_date), as_dict=1)
 	
@@ -228,6 +232,7 @@ def get_gross_profit_margin_trend(from_date, to_date):
 			SELECT SUM(amount) FROM `tabFolio Transaction`
 			WHERE posting_date = %s AND is_void = 0
 			AND (reference_doctype != 'Payment Entry' OR reference_doctype IS NULL)
+			AND IFNULL(item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
 		""", (d_str,))[0][0] or 0
 		
 		exp = frappe.db.get_value("Hospitality Expense", {"expense_date": d_str, "docstatus": 1}, "SUM(grand_total)") or 0
@@ -257,6 +262,7 @@ def get_today_revenue():
 		SELECT SUM(amount) FROM `tabFolio Transaction`
 		WHERE posting_date = %s AND is_void = 0
 		AND (reference_doctype != 'Payment Entry' OR reference_doctype IS NULL)
+			AND IFNULL(item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
 	""", (nowdate(),))[0][0] or 0
 
 @frappe.whitelist()

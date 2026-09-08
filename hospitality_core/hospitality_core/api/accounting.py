@@ -3,6 +3,7 @@ from frappe import _
 from frappe.utils import flt
 from hospitality_core.hospitality_core.api.utils import (
     get_hotel_company,
+    get_receivable_account,
     get_tax_breakdown,
     get_tax_config,
 )
@@ -139,7 +140,16 @@ def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
     """
     settings = frappe.get_single("Hospitality Accounting Settings")
     company = getattr(settings, "company", None) or get_hotel_company()
-    
+
+    # An advance for a future stay is not revenue on the day it is collected — the guest
+    # has not stayed yet, and the matching room charge will not exist until check-in or
+    # the night audit, possibly in a later period. Park it against the advance liability
+    # account instead; api.advance.apply_advance releases it into suspense when the money
+    # is actually applied to a room folio.
+    if frappe.db.get_value("Guest Folio", folio_id, "is_booking_master"):
+        park_advance_as_liability(payment_doc, folio_id, amount, cancel=cancel)
+        return
+
     # Calculate Net portion using configured GST rate
     breakdown = get_tax_breakdown(abs(flt(amount)))
     net_amount = breakdown["net_amount"]
@@ -183,6 +193,45 @@ def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
 
     for entry in gl_entries:
         entry.insert(ignore_permissions=True)
+
+def park_advance_as_liability(payment_doc, folio_id, amount, cancel=0):
+    """Hold an advance as a liability instead of recognising income.
+
+    dr Receivable / cr Advance Liability — the guest has paid, and the resort now owes
+    them a stay. Reversed into income suspense by api.advance.apply_advance at check-in.
+    """
+    settings = frappe.get_single("Hospitality Accounting Settings")
+    company = getattr(settings, "company", None) or get_hotel_company()
+    liability = settings.get("advance_liability_account")
+
+    if not liability:
+        frappe.throw(_(
+            "Set an Advance Liability Account in Hospitality Accounting Settings "
+            "before taking advances for future stays."
+        ))
+
+    gross = abs(flt(amount))
+    receivable = settings.receivable_account or get_receivable_account(company)
+
+    for account, debit, credit in (
+        (receivable, gross, 0.0),
+        (liability, 0.0, gross),
+    ):
+        frappe.get_doc({
+            "doctype": "GL Entry",
+            "posting_date": payment_doc.posting_date,
+            "account": account,
+            "party_type": payment_doc.get("party_type"),
+            "party": payment_doc.get("party"),
+            "debit": credit if cancel else debit,
+            "credit": debit if cancel else credit,
+            "voucher_type": "Payment Entry",
+            "voucher_no": payment_doc.name,
+            "remarks": f"Advance held for Booking Folio {folio_id}",
+            "cost_center": settings.cost_center,
+            "company": company,
+        }).insert(ignore_permissions=True)
+
 
 def redirect_pos_income_to_suspense(pos_invoice, method=None):
     """

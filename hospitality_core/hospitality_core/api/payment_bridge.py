@@ -461,11 +461,28 @@ def create_company_folio_transaction(folio_name, item, description, qty, amount,
 def adjust_payment_date(doc, method=None):
     """
     Hook: Payment Entry (before_insert)
-    Logic: If a payment is created before 8 AM, it belongs to the previous Hospitality Day.
-    Therefore, the posting_date should be set to yesterday.
+    Logic: a payment taken before 8 AM belongs to the previous hospitality day, so its
+    posting_date is moved back a day.
+
+    Scoped to hotel payments only. This fires on EVERY Payment Entry in the system, so
+    without the guard it silently back-dated supplier payments, payroll and everything
+    else — and on the 1st of a month it pushed them into the previous month, or the
+    previous fiscal year.
+
+    Advances are also left alone: an advance is dated when the guest actually paid, and
+    shifting it changes which period the cash was received in.
     """
     from frappe.utils import now_datetime, add_days, getdate
-    
-    if now_datetime().hour < 8:
-        # If it's before 8 AM, adjust posting date to yesterday
-        doc.posting_date = add_days(getdate(), -1)
+
+    if now_datetime().hour >= 8:
+        return
+
+    if not doc.get("guest_folio"):
+        return
+
+    if doc.get("hotel_booking") or frappe.db.get_value(
+        "Guest Folio", doc.guest_folio, "is_booking_master"
+    ):
+        return
+
+    doc.posting_date = add_days(getdate(), -1)

@@ -15,6 +15,94 @@
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Sales & Bookings",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hotel CRM",
+   "link_count": 0,
+   "link_to": "hotel-crm",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hotel POS",
+   "link_count": 0,
+   "link_to": "hotel-pos",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hotel Enquiry",
+   "link_count": 0,
+   "link_to": "Hotel Enquiry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hotel Booking",
+   "link_count": 0,
+   "link_to": "Hotel Booking",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Enquiry Conversion",
+   "link_count": 0,
+   "link_to": "Enquiry Conversion",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Call Activity",
+   "link_count": 0,
+   "link_to": "Call Activity",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Advance Collection",
+   "link_count": 0,
+   "link_to": "Advance Collection",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Advance Liability Register",
+   "link_count": 0,
+   "link_to": "Advance Liability Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Operations",
    "link_count": 0,
    "link_type": "DocType",
@@ -280,9 +368,9 @@
   {
    "hidden": 0,
    "is_query_report": 1,
-   "label": "Gross Profit Report",
+   "label": "Gross Revenue",
    "link_count": 0,
-   "link_to": "Gross Profit",
+   "link_to": "Gross Revenue Report",
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"

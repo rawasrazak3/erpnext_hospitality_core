@@ -140,6 +140,7 @@ class HotelReservation(Document):
                     frappe.msgprint(_("Check-in successful. Room charged {0} for date {1}.").format(rate, charge_date))
         
         self.save()
+        self.sync_parent_booking()
         return "Checked In"
 
     def process_check_out(self):
@@ -152,8 +153,22 @@ class HotelReservation(Document):
         if self.status != "Checked In":
             frappe.throw(_("Guest is not currently Checked In."))
 
-        if getdate(self.departure_date) != getdate(nowdate()):
-            frappe.throw(_("Cannot Check Out. Departure date ({0}) must be today ({1}).").format(self.departure_date, nowdate()))
+        # Departing early is normal in a hotel; departing in the past is not.
+        # Shorten the stay to today so the room goes back on sale for tonight and the
+        # nights the guest did not use are not billed by the night audit.
+        if getdate(self.departure_date) > getdate(nowdate()):
+            original = self.departure_date
+            self.db_set("departure_date", nowdate())
+            self.db_set("departure_time", now_datetime().strftime("%H:%M:%S"))
+            self.reload()
+            self.add_comment("Info", _(
+                "Early departure: stay shortened from {0} to {1} at check-out."
+            ).format(original, nowdate()))
+            frappe.msgprint(_("Early departure — stay shortened from {0} to today.").format(original))
+        elif getdate(self.departure_date) < getdate(nowdate()):
+            frappe.throw(_(
+                "Departure date ({0}) is in the past. Extend the stay to today before checking out."
+            ).format(self.departure_date))
 
         # Requirement: "When a reservation is part of a group booking, that reservation cannot be checked out until the master folio is cleared."
         if self.is_group_guest and self.group_booking:
@@ -306,10 +321,22 @@ class HotelReservation(Document):
         # 3. Update Room Status to Available
         frappe.db.set_value("Hotel Room", self.room, "status", "Available")
 
-        # 4. No self.save() needed - db_set handles the status update safely.
+        # 4. Move the parent booking on if this was its last live room.
+        self.sync_parent_booking()
+
+        # 5. No self.save() needed - db_set handles the status update safely.
 
         return "Checked Out"
     
+    def sync_parent_booking(self):
+        """Keep the owning Hotel Booking's status in step with its rooms."""
+        if not self.get("hotel_booking"):
+            return
+        from hospitality_core.hospitality_core.doctype.hotel_booking.hotel_booking import (
+            sync_booking_for_reservation,
+        )
+        sync_booking_for_reservation(self.name)
+
     def process_cancel(self):
         """
         Transition: Reserved -> Cancelled
@@ -368,7 +395,9 @@ class HotelReservation(Document):
                     
                 frappe.db.set_value("Guest Folio", self.folio, "status", "Cancelled")
                 frappe.msgprint(_("Linked Guest Folio {0} has been cancelled.").format(self.folio))
-        
+
+        self.sync_parent_booking()
+
         return "Cancelled"
 
     def on_update(self):
@@ -434,6 +463,60 @@ class HotelReservation(Document):
             sync_folio_balance(frappe.get_doc("Guest Folio", parent_folio))
 
 # Whitelisted methods for client-side buttons
+@frappe.whitelist()
+def extend_stay(reservation, new_departure_date, new_departure_time=None):
+    """Push a guest's departure out, if the room is still free for the extra nights.
+
+    The counterpart to early departure at check-out. Without this the only way a stay got
+    longer was the night audit's overstay handler, which fires at 2 PM and cannot be used
+    to plan ahead — so a guest asking at the desk to stay another night could not be
+    accommodated without editing the record and bypassing the availability check.
+    """
+    from hospitality_core.hospitality_core.api.availability import is_room_free
+
+    doc = frappe.get_doc("Hotel Reservation", reservation)
+    doc.check_permission("write")
+
+    if doc.status not in ("Reserved", "Checked In"):
+        frappe.throw(_("Only a Reserved or Checked In stay can be extended."))
+
+    if getdate(new_departure_date) <= getdate(doc.departure_date):
+        frappe.throw(_("New departure must be after the current departure ({0}).").format(
+            doc.departure_date
+        ))
+
+    # Only the added nights need checking; the guest already holds the room until now.
+    result = is_room_free(
+        doc.room, doc.departure_date, new_departure_date,
+        arrival_time=doc.departure_time, departure_time=new_departure_time,
+        ignore_reservation=doc.name,
+    )
+    if not result["free"]:
+        frappe.throw(_("Cannot extend: {0}").format(result["reason"]))
+
+    previous = doc.departure_date
+    doc.db_set("departure_date", getdate(new_departure_date))
+    if new_departure_time:
+        doc.db_set("departure_time", new_departure_time)
+    doc.add_comment("Info", _("Stay extended from {0} to {1}.").format(previous, new_departure_date))
+
+    # Keep the parent booking's window covering all of its rooms.
+    if doc.get("hotel_booking"):
+        booking_departure = frappe.db.get_value(
+            "Hotel Booking", doc.hotel_booking, "departure_date"
+        )
+        if booking_departure and getdate(new_departure_date) > getdate(booking_departure):
+            frappe.db.set_value(
+                "Hotel Booking", doc.hotel_booking, "departure_date", getdate(new_departure_date)
+            )
+
+    return {
+        "reservation": doc.name,
+        "previous_departure": str(previous),
+        "departure_date": str(getdate(new_departure_date)),
+    }
+
+
 @frappe.whitelist()
 def check_in_guest(name):
     doc = frappe.get_doc("Hotel Reservation", name)

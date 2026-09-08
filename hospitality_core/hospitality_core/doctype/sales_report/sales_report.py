@@ -47,9 +47,9 @@ class SalesReport(Document):
         self.total_expected_amount = 0.0
         self.total_actual_amount = 0.0
         self.total_difference = 0.0
-        self.vat_amount = 0.0
-        self.service_charge = 0.0
-        self.consumption_tax = 0.0
+        self.cgst_amount = 0.0
+        self.sgst_amount = 0.0
+        self.total_tax = 0.0
         self.net_sales = 0.0
         self.total_taxes = 0.0
         self.total_transactions = 0
@@ -85,11 +85,16 @@ class SalesReport(Document):
         self.total_actual_amount = flt(totals.get("actual"))
         self.total_difference = flt(totals.get("diff"))
         
-        self.vat_amount = self.total_expected_amount * 0.075
-        self.service_charge = self.total_expected_amount * 0.10
-        self.consumption_tax = self.total_expected_amount * 0.05
-        
-        self.net_sales = self.total_expected_amount - (self.vat_amount + self.service_charge + self.consumption_tax)
+        # Derive the tax split from the configured GST rate rather than the hardcoded
+        # 7.5% VAT / 10% service charge / 5% consumption tax this was forked with —
+        # those belong to a Nigerian tax model that the rest of the app does not use.
+        from hospitality_core.hospitality_core.api.utils import get_tax_breakdown
+
+        taxes = get_tax_breakdown(self.total_expected_amount)
+        self.cgst_amount = taxes["cgst_amount"]
+        self.sgst_amount = taxes["sgst_amount"]
+        self.total_tax = taxes["total_tax"]
+        self.net_sales = taxes["net_amount"]
 
     def aggregate_invoices(self, closing_entry_names):
         # Get linked invoices from the child table of POS Closing Entry

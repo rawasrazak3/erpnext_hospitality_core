@@ -15,9 +15,9 @@ def execute(filters=None):
         {"label": _("Discount"), "fieldname": "discount_amount", "fieldtype": "Currency", "width": 100},
         {"label": _("Net Charged"), "fieldname": "amount", "fieldtype": "Currency", "width": 120},
         {"label": _("Net Amount"), "fieldname": "net_amount", "fieldtype": "Currency", "width": 120},
-        {"label": _("CT (5%)"), "fieldname": "ct_amount", "fieldtype": "Currency", "width": 100},
-        {"label": _("VAT (7.5%)"), "fieldname": "vat_amount", "fieldtype": "Currency", "width": 100},
-        {"label": _("SC (10%)"), "fieldname": "sc_amount", "fieldtype": "Currency", "width": 100}
+        {"label": _("CGST"), "fieldname": "cgst_amount", "fieldtype": "Currency", "width": 100},
+        {"label": _("SGST"), "fieldname": "sgst_amount", "fieldtype": "Currency", "width": 100},
+        {"label": _("Total Tax"), "fieldname": "total_tax", "fieldtype": "Currency", "width": 100}
     ]
 
     # Filters
@@ -69,6 +69,7 @@ def execute(filters=None):
             ft.posting_date BETWEEN %(from_date)s AND %(to_date)s
             AND ft.is_void = 0
             AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
+				AND IFNULL(ft.item, '') NOT IN ('PAYMENT','REFUND','TRANSFER','TRANSFER-GROUP','REFUND-TRANSFER','BALANCE-TRANSFER','ADVANCE-TRANSFER')
             AND ft.item NOT IN ('PAYMENT', 'TRANSFER', 'TRANSFER-GROUP')
             {conditions}
         ORDER BY
@@ -104,9 +105,9 @@ def execute(filters=None):
         taxes = get_tax_breakdown(row.amount)
         row.update({
             "net_amount": taxes["net_amount"],
-            "ct_amount": taxes["ct_amount"],
-            "vat_amount": taxes["vat_amount"],
-            "sc_amount": taxes["sc_amount"]
+            "cgst_amount": taxes["cgst_amount"],
+            "sgst_amount": taxes["sgst_amount"],
+            "total_tax": taxes["total_tax"]
         })
         
     # 3. Handle any orphaned discounts (e.g. if a discount was posted without a corresponding charge)
@@ -121,9 +122,9 @@ def execute(filters=None):
             "discount_amount": disc_amt,
             "amount": -disc_amt,
             "net_amount": -disc_amt,
-            "ct_amount": 0,
-            "vat_amount": 0,
-            "sc_amount": 0
+            "cgst_amount": 0,
+            "sgst_amount": 0,
+            "total_tax": 0
         })
 
     return columns, charges

@@ -1,0 +1,396 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-09-03 01:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "guest_name",
+  "mobile_no",
+  "alt_mobile",
+  "email",
+  "col_break_person",
+  "status",
+  "source",
+  "enquiry_owner",
+  "hotel_reception",
+  "city",
+  "sec_stay",
+  "check_in_date",
+  "check_out_date",
+  "nights",
+  "col_break_stay",
+  "adults",
+  "children",
+  "flexible_dates",
+  "sec_rooms",
+  "room_lines",
+  "sec_money",
+  "budget",
+  "col_break_money",
+  "quoted_total",
+  "sec_followup",
+  "next_follow_up",
+  "col_break_followup",
+  "last_contacted",
+  "sec_followup_table",
+  "follow_ups",
+  "sec_outcome",
+  "converted",
+  "guest",
+  "hotel_booking",
+  "col_break_outcome",
+  "status_type",
+  "lost_reason",
+  "lost_notes",
+  "sec_telephony",
+  "first_call_log",
+  "notes",
+  "mobile_key",
+  "alt_mobile_key"
+ ],
+ "fields": [
+  {
+   "default": "HE-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "HE-.YYYY.-",
+   "print_hide": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "guest_name",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 0,
+   "label": "Guest Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mobile_no",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "label": "Mobile No",
+   "options": "Phone",
+   "reqd": 1
+  },
+  {
+   "fieldname": "alt_mobile",
+   "fieldtype": "Data",
+   "label": "Alternate No",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "col_break_person",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Hotel Enquiry Status",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Source",
+   "options": "Hotel Enquiry Source"
+  },
+  {
+   "fieldname": "enquiry_owner",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Owner",
+   "options": "User"
+  },
+  {
+   "fieldname": "hotel_reception",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "Hotel Reception"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "sec_stay",
+   "fieldtype": "Section Break",
+   "label": "Stay Requirement"
+  },
+  {
+   "fieldname": "check_in_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Check In"
+  },
+  {
+   "fieldname": "check_out_date",
+   "fieldtype": "Date",
+   "label": "Check Out"
+  },
+  {
+   "fieldname": "nights",
+   "fieldtype": "Int",
+   "label": "Nights",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_stay",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "2",
+   "fieldname": "adults",
+   "fieldtype": "Int",
+   "label": "Adults"
+  },
+  {
+   "default": "0",
+   "fieldname": "children",
+   "fieldtype": "Int",
+   "label": "Children"
+  },
+  {
+   "fieldname": "flexible_dates",
+   "fieldtype": "Check",
+   "label": "Dates are flexible"
+  },
+  {
+   "fieldname": "sec_rooms",
+   "fieldtype": "Section Break",
+   "label": "Rooms Requested"
+  },
+  {
+   "fieldname": "room_lines",
+   "fieldtype": "Table",
+   "label": "Rooms",
+   "options": "Enquiry Room Line"
+  },
+  {
+   "fieldname": "sec_money",
+   "fieldtype": "Section Break",
+   "label": "Commercials"
+  },
+  {
+   "fieldname": "budget",
+   "fieldtype": "Currency",
+   "label": "Guest Budget"
+  },
+  {
+   "fieldname": "col_break_money",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "quoted_total",
+   "fieldtype": "Currency",
+   "label": "Quoted Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_followup",
+   "fieldtype": "Section Break",
+   "label": "Follow Up"
+  },
+  {
+   "fieldname": "next_follow_up",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Next Follow Up"
+  },
+  {
+   "fieldname": "col_break_followup",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_contacted",
+   "fieldtype": "Datetime",
+   "label": "Last Contacted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_followup_table",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "follow_ups",
+   "fieldtype": "Table",
+   "label": "Follow Up Log",
+   "options": "Hotel Enquiry Follow Up"
+  },
+  {
+   "fieldname": "sec_outcome",
+   "fieldtype": "Section Break",
+   "label": "Outcome"
+  },
+  {
+   "fieldname": "converted",
+   "fieldtype": "Check",
+   "label": "Converted",
+   "read_only": 1
+  },
+  {
+   "description": "Set when this enquiry becomes a booking.",
+   "fieldname": "guest",
+   "fieldtype": "Link",
+   "label": "Guest",
+   "options": "Guest",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_outcome",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "status.type",
+   "fieldname": "status_type",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Status Type",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.status_type=='Lost'",
+   "fieldname": "lost_reason",
+   "fieldtype": "Link",
+   "label": "Lost Reason",
+   "mandatory_depends_on": "eval:doc.status_type=='Lost'",
+   "options": "Hotel Lost Reason"
+  },
+  {
+   "depends_on": "eval:doc.status_type=='Lost'",
+   "fieldname": "lost_notes",
+   "fieldtype": "Small Text",
+   "label": "Lost Notes"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "sec_telephony",
+   "fieldtype": "Section Break",
+   "label": "Telephony"
+  },
+  {
+   "fieldname": "first_call_log",
+   "fieldtype": "Link",
+   "label": "First Call",
+   "options": "CRM Call Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Text Editor",
+   "label": "Notes"
+  },
+  {
+   "description": "Last 10 digits of mobile_no. Indexed so call matching and phone search are exact lookups instead of a regex scan over every enquiry.",
+   "fieldname": "mobile_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Mobile Key",
+   "no_copy": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "alt_mobile_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Alt Mobile Key",
+   "no_copy": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "hotel_booking",
+   "fieldtype": "Link",
+   "label": "Booking",
+   "no_copy": 1,
+   "options": "Hotel Booking",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-03 01:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hospitality Core",
+ "name": "Hotel Enquiry",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hospitality Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hotel Sales Agent",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hospitality User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "guest_name,mobile_no,status",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "guest_name",
+ "track_changes": 1
+}
