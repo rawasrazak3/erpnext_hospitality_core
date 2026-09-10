@@ -3,7 +3,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate, nowdate
 
-class LostAndFoundItem(Document):
+class LostandFoundItem(Document):
     def validate(self):
         self.validate_dates()
         self.validate_claim()
@@ -22,3 +22,7 @@ class LostAndFoundItem(Document):
             
             if getdate(self.claimed_date) < getdate(self.found_date):
                 frappe.throw(_("Claimed Date cannot be before Found Date."))
+
+
+# Backwards-compatible alias for the previous class name.
+LostAndFoundItem = LostandFoundItem
