@@ -4,7 +4,7 @@
  "docstatus": 0,
  "doctype": "Page",
  "idx": 0,
- "modified": "2025-01-28 10:00:00.000000",
+ "modified": "2026-09-09 22:03:02.736371",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "front-desk-console",
@@ -12,12 +12,18 @@
  "page_name": "front-desk-console",
  "roles": [
   {
+   "role": "Hospitality Manager"
+  },
+  {
    "role": "Hospitality User"
+  },
+  {
+   "role": "Hotel Sales Agent"
   },
   {
    "role": "System Manager"
   }
  ],
  "standard": "Yes",
- "title": "Front Desk Console"
+ "title": "Front Desk"
 }

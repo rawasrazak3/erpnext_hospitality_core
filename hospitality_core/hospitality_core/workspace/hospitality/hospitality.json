@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"FD_HDR\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Front Desk Operations</span>\",\"col\":12}},{\"id\":\"AN_SHORT\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Analytics Dashboard\",\"col\":4}},{\"id\":\"AFikpVG8G_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Front Desk Console\",\"col\":4}},{\"id\":\"LmjeZv2AcL\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Tape Chart\",\"col\":4}},{\"id\":\"is7sVl6bVG\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Availability Query\",\"col\":4}},{\"id\":\"KRRJXdLa5m\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Guest 360 View\",\"col\":4}},{\"id\":\"Vqn38JTnz-\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Maintenance Requests\",\"col\":4}},{\"id\":\"41rbMghVLH\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Housekeeping Board\",\"col\":4}},{\"id\":\"bY0PQMbLR1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Invoice\",\"col\":4}},{\"id\":\"IUtrHgUKOe\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Entry\",\"col\":3}},{\"id\":\"1XswkkRf_g\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}},{\"id\":\"QQwoEW_WYs\",\"type\":\"card\",\"data\":{\"card_name\":\"Operational Reports\",\"col\":4}},{\"id\":\"eiDfp-ImIL\",\"type\":\"card\",\"data\":{\"card_name\":\"Financial Activities\",\"col\":4}},{\"id\":\"MGMT_HDR\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Management &amp; Inventory</span>\",\"col\":12}},{\"id\":\"3fpFN3V6Ax\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations\",\"col\":4}},{\"id\":\"QcU-MEY5VS\",\"type\":\"card\",\"data\":{\"card_name\":\"Inventory & Rates\",\"col\":4}},{\"id\":\"n54kJReGGr\",\"type\":\"card\",\"data\":{\"card_name\":\"Accounting & Billing\",\"col\":4}}]",
+ "content": "[{\"id\":\"CRM_HDR\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Sales &amp; CRM</span>\",\"col\":12}},{\"id\":\"CRM_SHORT\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hotel CRM\",\"col\":4}},{\"id\":\"CRM_BOOK_SHORT\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hotel Booking\",\"col\":4}},{\"id\":\"CRM_ENQ_SHORT\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hotel Enquiry\",\"col\":4}},{\"id\":\"CRM_CARD\",\"type\":\"card\",\"data\":{\"card_name\":\"Sales & Bookings\",\"col\":4}},{\"id\":\"FD_HDR\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Front Desk Operations</span>\",\"col\":12}},{\"id\":\"AN_SHORT\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Analytics Dashboard\",\"col\":4}},{\"id\":\"AFikpVG8G_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Front Desk Console\",\"col\":4}},{\"id\":\"LmjeZv2AcL\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Tape Chart\",\"col\":4}},{\"id\":\"is7sVl6bVG\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Availability Query\",\"col\":4}},{\"id\":\"KRRJXdLa5m\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Guest 360 View\",\"col\":4}},{\"id\":\"Vqn38JTnz-\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Maintenance Requests\",\"col\":4}},{\"id\":\"41rbMghVLH\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Housekeeping Board\",\"col\":4}},{\"id\":\"bY0PQMbLR1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Invoice\",\"col\":4}},{\"id\":\"IUtrHgUKOe\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Entry\",\"col\":3}},{\"id\":\"1XswkkRf_g\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}},{\"id\":\"QQwoEW_WYs\",\"type\":\"card\",\"data\":{\"card_name\":\"Operational Reports\",\"col\":4}},{\"id\":\"eiDfp-ImIL\",\"type\":\"card\",\"data\":{\"card_name\":\"Financial Activities\",\"col\":4}},{\"id\":\"MGMT_HDR\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Management &amp; Inventory</span>\",\"col\":12}},{\"id\":\"3fpFN3V6Ax\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations\",\"col\":4}},{\"id\":\"QcU-MEY5VS\",\"type\":\"card\",\"data\":{\"card_name\":\"Inventory & Rates\",\"col\":4}},{\"id\":\"n54kJReGGr\",\"type\":\"card\",\"data\":{\"card_name\":\"Accounting & Billing\",\"col\":4}}]",
  "creation": "2026-01-17 20:44:38.076236",
  "custom_blocks": [],
  "docstatus": 0,
@@ -485,7 +485,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-06-12 14:45:28.888897",
+ "modified": "2026-09-09 21:20:53.343406",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hospitality",
@@ -502,10 +502,31 @@
   },
   {
    "role": "Hospitality Manager"
+  },
+  {
+   "role": "Hotel Sales Agent"
   }
  ],
  "sequence_id": 0.0,
  "shortcuts": [
+  {
+   "doc_view": "",
+   "label": "Hotel Enquiry",
+   "link_to": "Hotel Enquiry",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Hotel Booking",
+   "link_to": "Hotel Booking",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Hotel CRM",
+   "link_to": "hotel-crm",
+   "type": "Page"
+  },
   {
    "doc_view": "",
    "label": "Analytics Dashboard",

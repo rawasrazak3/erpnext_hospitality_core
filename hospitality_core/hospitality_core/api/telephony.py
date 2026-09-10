@@ -86,6 +86,34 @@ def link_call_to_enquiry(doc, method=None):
         )
 
 
+def count_unlinked_calls(cap=99):
+    """How many unattended calls are waiting, counted rather than measured.
+
+    `len(get_unlinked_calls(...))` pins at whatever limit was passed, so a badge fed
+    that way reads "200" forever once the queue is busy. Counting is capped instead,
+    and the caller renders the cap as "99+" — the exact size of a backlog nobody is
+    going to clear today is not information worth a full table scan.
+    """
+    rows = frappe.db.sql(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT 1
+            FROM `tabCRM Call Log` cl
+            WHERE (cl.custom_hotel_enquiry IS NULL OR cl.custom_hotel_enquiry = '')
+              AND IFNULL(cl.custom_number_key, '') != ''
+              AND NOT EXISTS (
+                    SELECT 1 FROM `tabHotel Enquiry` he
+                    WHERE he.mobile_key = cl.custom_number_key
+                       OR he.alt_mobile_key = cl.custom_number_key
+              )
+            LIMIT %(cap)s
+        ) capped
+        """,
+        {"cap": int(cap)},
+    )
+    return rows[0][0] if rows else 0
+
+
 @frappe.whitelist()
 def get_unlinked_calls(limit=50, only_mine=False):
     """Calls that matched no enquiry — the sales console's 'unattended calls' queue."""

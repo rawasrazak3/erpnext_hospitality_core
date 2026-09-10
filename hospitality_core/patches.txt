@@ -10,3 +10,4 @@ hospitality_core.patches.v1_0.create_hospitality_roles
 hospitality_core.patches.v1_0.add_missing_hospitality_custom_fields
 hospitality_core.patches.v1_0.seed_hotel_crm_masters
 hospitality_core.patches.v1_0.backfill_call_log_number_keys
+hospitality_core.patches.v1_0.set_front_desk_home_page
