@@ -14,6 +14,7 @@ import frappe
 from frappe.utils import flt, nowdate
 
 from hospitality_core.hospitality_core.api import telephony
+from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import BLOCKED_STATUSES
 
 # An enquiry sitting in one of these stages is still live sales work. Mirrors
 # hotel_crm.OPEN_TYPES — the CRM console and this page must agree on "open" or the
@@ -112,7 +113,11 @@ def get_console_data(target_date=None):
 	# Available Rooms Calculation
 	# Logic: Total - (Currently In House for Night + Reserved Arrivals) - OOO
 	# Note: A room that checks out today is available for a new arrival tonight.
-	ooo_rooms = frappe.db.count("Hotel Room", {"status": "Out of Order", "is_enabled": 1})
+	# Maintenance blocks a room just as Out of Order does, so both come out of the
+	# sellable count or the console would offer rooms the engine then refuses.
+	ooo_rooms = frappe.db.count(
+		"Hotel Room", {"status": ["in", BLOCKED_STATUSES], "is_enabled": 1}
+	)
 
 	# Committed Rooms = People staying tonight + People arriving tonight
 	committed_rooms = in_house_count + arrivals_pending
@@ -182,7 +187,7 @@ def get_nav_counts():
 	if frappe.has_permission("Hotel Room", "read"):
 		counts["rooms_dirty"] = frappe.db.count("Hotel Room", {"status": "Dirty", "is_enabled": 1})
 		counts["rooms_ooo"] = frappe.db.count(
-			"Hotel Room", {"status": "Out of Order", "is_enabled": 1}
+			"Hotel Room", {"status": ["in", BLOCKED_STATUSES], "is_enabled": 1}
 		)
 
 	if frappe.has_permission("Hotel Maintenance Request", "read"):

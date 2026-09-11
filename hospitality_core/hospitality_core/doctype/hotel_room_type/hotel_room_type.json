@@ -1,5 +1,6 @@
 {
     "actions": [],
+    "allow_import": 1,
     "allow_rename": 1,
     "autoname": "field:room_type_name",
     "creation": "2025-01-28 10:00:00.000000",
@@ -7,24 +8,90 @@
     "engine": "InnoDB",
     "field_order": [
         "room_type_name",
-        "default_rate",
+        "bedroom_configuration",
+        "no_of_bedrooms",
+        "column_break_head",
+        "is_active",
+        "description",
+        "sec_occupancy",
+        "max_occupancy",
+        "column_break_occ",
         "max_adults",
         "max_children",
-        "description"
+        "sec_tariff",
+        "default_rate",
+        "weekend_rate",
+        "column_break_tariff_1",
+        "extra_person_rate_weekday",
+        "extra_person_rate_weekend",
+        "column_break_tariff_2",
+        "extra_bed_adult_rate",
+        "extra_bed_child_rate",
+        "sec_amenities",
+        "has_tea_coffee_toiletries",
+        "has_fridge",
+        "column_break_amenities_1",
+        "has_tv",
+        "has_wifi",
+        "column_break_amenities_2",
+        "has_private_pool"
     ],
     "fields": [
         {
             "fieldname": "room_type_name",
             "fieldtype": "Data",
+            "in_list_view": 1,
             "label": "Room Type Name",
             "reqd": 1,
             "unique": 1
         },
         {
-            "fieldname": "default_rate",
-            "fieldtype": "Currency",
-            "label": "Default Rate",
+            "description": "Bed layout as the property advertises it, e.g. 3BH, 2BH, 1 Bed Room 2 Beds.",
+            "fieldname": "bedroom_configuration",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Bed Room"
+        },
+        {
+            "default": "1",
+            "description": "Number of separate bedrooms. Used for reporting and capacity planning.",
+            "fieldname": "no_of_bedrooms",
+            "fieldtype": "Int",
+            "label": "No. of Bedrooms"
+        },
+        {
+            "fieldname": "column_break_head",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "1",
+            "description": "Uncheck to retire a category without deleting it. Inactive types are hidden from new bookings.",
+            "fieldname": "is_active",
+            "fieldtype": "Check",
+            "label": "Is Active"
+        },
+        {
+            "fieldname": "description",
+            "fieldtype": "Small Text",
+            "label": "Description"
+        },
+        {
+            "fieldname": "sec_occupancy",
+            "fieldtype": "Section Break",
+            "label": "Occupancy"
+        },
+        {
+            "default": "2",
+            "description": "Maximum total guests (adults + children) allowed in the room.",
+            "fieldname": "max_occupancy",
+            "fieldtype": "Int",
+            "in_list_view": 1,
+            "label": "Max Allowed",
             "reqd": 1
+        },
+        {
+            "fieldname": "column_break_occ",
+            "fieldtype": "Column Break"
         },
         {
             "default": "2",
@@ -41,14 +108,96 @@
             "reqd": 1
         },
         {
-            "fieldname": "description",
-            "fieldtype": "Small Text",
-            "label": "Description"
+            "fieldname": "sec_tariff",
+            "fieldtype": "Section Break",
+            "label": "Tariff"
+        },
+        {
+            "description": "Weekday tariff per night, for occupancy up to the base headcount.",
+            "fieldname": "default_rate",
+            "fieldtype": "Currency",
+            "in_list_view": 1,
+            "label": "Default Rate",
+            "reqd": 1
+        },
+        {
+            "description": "Weekend tariff per night. Leave blank to charge the Default Rate on weekends too.",
+            "fieldname": "weekend_rate",
+            "fieldtype": "Currency",
+            "label": "Weekend Rate"
+        },
+        {
+            "fieldname": "column_break_tariff_1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "description": "Per extra head, per day, on weekdays (W/Head/Day).",
+            "fieldname": "extra_person_rate_weekday",
+            "fieldtype": "Currency",
+            "label": "Extra Person / Head / Day (Weekday)"
+        },
+        {
+            "description": "Per extra head, per day, on weekends (WE/Head/Day).",
+            "fieldname": "extra_person_rate_weekend",
+            "fieldtype": "Currency",
+            "label": "Extra Person / Head / Day (Weekend)"
+        },
+        {
+            "fieldname": "column_break_tariff_2",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "extra_bed_adult_rate",
+            "fieldtype": "Currency",
+            "label": "Extra Bed / Adult"
+        },
+        {
+            "fieldname": "extra_bed_child_rate",
+            "fieldtype": "Currency",
+            "label": "Extra Bed / Child"
+        },
+        {
+            "fieldname": "sec_amenities",
+            "fieldtype": "Section Break",
+            "label": "Amenities"
+        },
+        {
+            "fieldname": "has_tea_coffee_toiletries",
+            "fieldtype": "Check",
+            "label": "Tea / Coffee / Toiletries"
+        },
+        {
+            "fieldname": "has_fridge",
+            "fieldtype": "Check",
+            "label": "Fridge"
+        },
+        {
+            "fieldname": "column_break_amenities_1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "has_tv",
+            "fieldtype": "Check",
+            "label": "TV"
+        },
+        {
+            "fieldname": "has_wifi",
+            "fieldtype": "Check",
+            "label": "Wi-Fi"
+        },
+        {
+            "fieldname": "column_break_amenities_2",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "has_private_pool",
+            "fieldtype": "Check",
+            "label": "Private Pool"
         }
     ],
     "index_web_pages_for_search": 1,
     "links": [],
-    "modified": "2025-01-28 10:00:00.000000",
+    "modified": "2026-09-11 10:00:00.000000",
     "modified_by": "Administrator",
     "module": "Hospitality Core",
     "name": "Hotel Room Type",

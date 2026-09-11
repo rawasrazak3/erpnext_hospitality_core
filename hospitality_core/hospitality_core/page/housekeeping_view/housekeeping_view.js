@@ -29,6 +29,7 @@ function render_housekeeping_board(wrapper) {
                     else if (room.status === 'Occupied') card_color = 'border-primary';
                     else if (room.status === 'Available') card_color = 'border-success'; // Clean
                     else if (room.status === 'Out of Order') card_color = 'border-secondary';
+                    else if (room.status === 'Maintenance') card_color = 'border-warning';
 
                     let html = `
                     <div class="col-xs-6 col-sm-4 col-md-3 col-lg-2" style="padding: 10px;">

@@ -64,6 +64,7 @@ function render_results(wrapper, data) {
         if (row.status === 'Occupied') status_color = '#d35400';
         if (row.status === 'Reserved') status_color = '#2980b9';
         if (row.status === 'Out of Order') status_color = '#c0392b';
+        else if (row.status === 'Maintenance') status_color = '#d35400';
 
         details_html += `
             <tr>

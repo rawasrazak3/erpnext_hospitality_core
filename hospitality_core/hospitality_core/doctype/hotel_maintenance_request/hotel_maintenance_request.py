@@ -2,6 +2,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
+from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import BLOCKED_STATUSES
+
 class HotelMaintenanceRequest(Document):
 	def recalculate_total_expenses(self):
 		total = frappe.db.sql("""
@@ -19,20 +21,55 @@ class HotelMaintenanceRequest(Document):
 		self.update_room_status()
 
 	def update_room_status(self):
-		# Only update room status if the room is currently enabled
+		"""Keep the room's status in step with the request.
+
+		An open request puts the room into 'Maintenance', which blocks allocation.
+		'Out of Order' is left alone: that is the manual, longer-term block a manager
+		sets by hand, and a routine work order finishing should not quietly lift it.
+		"""
 		if not frappe.db.get_value("Hotel Room", self.room, "is_enabled"):
 			return
 
 		current_room_status = frappe.db.get_value("Hotel Room", self.room, "status")
 
-		# Logic: If Request is Open/In Progress, block the room
-		if self.status in ["Reported", "In Progress"]:
-			if current_room_status != "Out of Order":
-				frappe.db.set_value("Hotel Room", self.room, "status", "Out of Order")
-				frappe.msgprint(_("Room {0} marked as 'Out of Order' due to maintenance request.").format(self.room))
+		if self.status in ("Reported", "In Progress"):
+			# Already blocked (either way) — nothing to do.
+			if current_room_status in BLOCKED_STATUSES:
+				return
 
-		# Logic: If Request is Completed, release the room to Housekeeping
-		elif self.status == "Completed":
-			if current_room_status == "Out of Order":
+			occupant = frappe.db.exists(
+				"Hotel Reservation", {"room": self.room, "status": "Checked In"}
+			)
+			if occupant:
+				# The guest is physically in the room, so blocking it would make the
+				# tape chart lie. Flag it instead and let the front desk move them.
+				frappe.msgprint(_(
+					"Room {0} has a guest checked in, so it has not been blocked. "
+					"Move or check out the guest, then set the room to Maintenance."
+				).format(self.room), indicator="orange", alert=True)
+				return
+
+			frappe.db.set_value("Hotel Room", self.room, "status", "Maintenance")
+			frappe.msgprint(
+				_("Room {0} marked as 'Maintenance' and will not be offered for allocation.")
+				.format(self.room)
+			)
+
+		elif self.status in ("Completed", "Cancelled"):
+			# Only release what this workflow blocked.
+			if current_room_status == "Maintenance":
+				if self.has_other_open_requests():
+					return
 				frappe.db.set_value("Hotel Room", self.room, "status", "Dirty")
-				frappe.msgprint(_("Maintenance Completed. Room {0} marked as 'Dirty' for cleaning.").format(self.room))
+				frappe.msgprint(
+					_("Room {0} released from Maintenance and marked 'Dirty' for cleaning.")
+					.format(self.room)
+				)
+
+	def has_other_open_requests(self):
+		"""Another open work order on the same room keeps it blocked."""
+		return bool(frappe.db.exists("Hotel Maintenance Request", {
+			"room": self.room,
+			"status": ["in", ("Reported", "In Progress")],
+			"name": ["!=", self.name],
+		}))

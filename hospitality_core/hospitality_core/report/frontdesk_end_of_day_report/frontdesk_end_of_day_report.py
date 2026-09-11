@@ -5,6 +5,8 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import BLOCKED_STATUSES
+
 def execute(filters=None):
 	columns = get_columns()
 	data = get_data(filters)
@@ -215,7 +217,7 @@ def get_data(filters):
 	# Occupancy = (Retained + New Check-ins) / Total Rooms in Reception
 	room_filters = {
 		"is_enabled": 1,
-		"status": ["!=", "Out of Order"]
+		"status": ["not in", BLOCKED_STATUSES]
 	}
 	if reception:
 		room_filters["hotel_reception"] = reception

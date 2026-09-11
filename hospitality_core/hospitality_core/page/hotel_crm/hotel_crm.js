@@ -1167,7 +1167,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 
 		render_board_filters() {
 			const f = this.state.board_filter || (this.state.board_filter = {
-				preset: 'all', date_field: 'enquired', from: null, to: null,
+				preset: 'all', date_field: 'enquired', from: null, to: null, room_type: null,
 			});
 			const presets = this.board_presets()
 				.map(
@@ -1191,7 +1191,9 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 					</div>
 					<span class="hcrm-bf-count" id="hcrm-bf-count"></span>
 				</div>
+				<div class="hcrm-bf-rooms" id="hcrm-bf-rooms"></div>
 			`);
+			this.render_room_chips();
 			this.bind_board_filters();
 		},
 
@@ -1212,12 +1214,49 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				// "Custom" only opens the inputs; nothing is filtered until dates are picked.
 				if (key !== 'custom' || (f.from && f.to)) this.load_board();
 			});
+			$f.on('click', '.hcrm-roomchip', (e) => {
+				const room = $(e.currentTarget).data('room') || null;
+				const f = this.state.board_filter;
+				f.room_type = f.room_type === room ? null : room; // clicking the active chip clears it
+				this.render_room_chips();
+				this.load_board();
+			});
 			$f.on('change', '#hcrm-bf-from, #hcrm-bf-to', () => {
 				const f = this.state.board_filter;
 				f.from = $('#hcrm-bf-from').val() || null;
 				f.to = $('#hcrm-bf-to').val() || null;
 				if (f.from || f.to) this.load_board();
 			});
+		},
+
+		/* Demand chips, not a dropdown: the counts are the answer to "how much is this
+		 * room being asked for in these dates", so they have to be readable without
+		 * opening anything. Rendered from the last load, which measures demand before
+		 * the room filter is applied — otherwise selecting a type would erase the
+		 * comparison that makes the row worth looking at. */
+		render_room_chips() {
+			const f = this.state.board_filter;
+			const demand = this.state.room_demand || [];
+			if (!demand.length) return $('#hcrm-bf-rooms').empty();
+
+			const chips = demand
+				.map((d) => {
+					const active = f.room_type === d.room_type;
+					return `<button class="hcrm-roomchip ${active ? 'active' : ''}"
+						data-room="${frappe.utils.escape_html(d.room_type)}"
+						title="${__('{0} enquiries want {1} room(s) of this type', [d.enquiries, d.qty])}">
+						<span class="hcrm-roomchip-t">${frappe.utils.escape_html(d.room_type)}</span>
+						<span class="hcrm-roomchip-n">${d.enquiries}</span>
+						<span class="hcrm-roomchip-q">${__('{0} rm', [d.qty])}</span>
+					</button>`;
+				})
+				.join('');
+
+			$('#hcrm-bf-rooms').html(`
+				<span class="hcrm-bf-label">${__('Room requested')}</span>
+				<button class="hcrm-roomchip ${f.room_type ? '' : 'active'}" data-room="">${__('Any')}</button>
+				${chips}
+			`);
 		},
 
 		load_board() {
@@ -1228,6 +1267,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 					date_field: f.date_field || 'enquired',
 					from_date: f.preset === 'all' ? null : f.from,
 					to_date: f.preset === 'all' ? null : f.to,
+					room_type: f.room_type || null,
 				},
 				callback: (r) => r.message && this.render_board(r.message),
 			});
@@ -1251,8 +1291,14 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 					})
 					.join('')
 			);
+			this.state.room_demand = data.room_demand || [];
+			this.render_room_chips();
 			$('#hcrm-bf-count').text(
-				data.total === undefined ? '' : __('{0} enquiries', [data.total])
+				data.total === undefined
+					? ''
+					: data.room_type
+					? __('{0} enquiries for {1}', [data.total, data.room_type])
+					: __('{0} enquiries', [data.total])
 			);
 			this.bind_board();
 		},

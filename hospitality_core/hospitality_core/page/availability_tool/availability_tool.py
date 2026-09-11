@@ -1,5 +1,7 @@
 import frappe
 
+from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import BLOCKED_STATUSES
+
 @frappe.whitelist()
 def check_availability_counts(start_date, end_date):
     # 1. Get all Enabled Rooms
@@ -29,9 +31,9 @@ def check_availability_counts(start_date, end_date):
         status = "Available"
         details = ""
 
-        if room.current_status == "Out of Order":
-            status = "Out of Order"
-            details = "Maintenance"
+        if room.current_status in BLOCKED_STATUSES:
+            status = room.current_status
+            details = "Blocked - not allocatable"
         elif res:
             if res.status == "Checked In":
                 status = "Occupied"
@@ -51,7 +53,7 @@ def check_availability_counts(start_date, end_date):
             summary_map[room.room_type] = {"room_type": room.room_type, "total": 0, "occupied": 0, "available": 0}
         
         summary_map[room.room_type]["total"] += 1
-        if status in ["Occupied", "Reserved", "Out of Order"]:
+        if status in ("Occupied", "Reserved") or status in BLOCKED_STATUSES:
             summary_map[room.room_type]["occupied"] += 1
         else:
             summary_map[room.room_type]["available"] += 1

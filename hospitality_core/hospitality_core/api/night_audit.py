@@ -1,7 +1,11 @@
 import frappe
 from frappe import _
 from frappe.utils import add_days, nowdate, getdate, flt
+
 from hospitality_core.hospitality_core.api.folio import sync_folio_balance, mirror_to_company_folio, mirror_to_group_folio
+from hospitality_core.hospitality_core.doctype.hotel_room_type.hotel_room_type import (
+    get_rate_for_date,
+)
 
 def run_daily_audit():
     """
@@ -194,14 +198,18 @@ def handle_overstay(res):
         )
 
 def get_rate(rate_plan, room_type, date):
-    if not rate_plan:
-        return frappe.db.get_value("Hotel Room Type", room_type, "default_rate")
-    
-    plan = frappe.get_doc("Room Rate Plan", rate_plan)
-    if getdate(date) >= getdate(plan.valid_from) and getdate(date) <= getdate(plan.valid_to):
-        return plan.rate
-    else:
-        return frappe.db.get_value("Hotel Room Type", room_type, "default_rate")
+    """The nightly tariff for one night of one reservation.
+
+    A Rate Plan is a negotiated override and wins outright while it is in force. With no
+    plan (or outside its validity window) the room type's own tariff applies, and that
+    tariff is weekday/weekend split — the property charges more Friday through Sunday.
+    """
+    if rate_plan:
+        plan = frappe.get_doc("Room Rate Plan", rate_plan)
+        if getdate(plan.valid_from) <= getdate(date) <= getdate(plan.valid_to):
+            return plan.rate
+
+    return get_rate_for_date(room_type, date)
 
 def post_room_charge(res, base_amount, date):
     """

@@ -1,6 +1,8 @@
 import frappe
 from frappe.utils import nowdate
 
+from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import BLOCKED_STATUSES
+
 @frappe.whitelist()
 def sync_room_status():
     """
@@ -9,7 +11,7 @@ def sync_room_status():
     Rules:
       - Rooms with an active 'Checked In' reservation → Occupied
       - Rooms with a 'Reserved' reservation arriving today (time-aware) → Occupied
-      - Rooms marked 'Out of Order' → left unchanged (managed manually)
+      - Rooms blocked by status (Maintenance, Out of Order) → left unchanged (managed manually)
       - All other rooms → Available
     """
     today = nowdate()
@@ -18,27 +20,29 @@ def sync_room_status():
     rooms = frappe.get_all("Hotel Room", fields=["name", "status"])
     print(f"Found {len(rooms)} rooms.")
 
-    # Build sets for fast lookup
-    checked_in_rooms = set(frappe.db.sql("""
+    # Build sets for fast lookup.
+    # sql_list, not sql(flat=True): frappe.db.sql takes no `flat` argument, so the
+    # original call raised TypeError and this sync never completed a single run.
+    checked_in_rooms = set(frappe.db.sql_list("""
         SELECT DISTINCT room FROM `tabHotel Reservation`
         WHERE status = 'Checked In' AND room IS NOT NULL
-    """, as_list=True, flat=True))
+    """))
 
     # Use datetime comparison: only mark as arriving if the arrival datetime has passed
-    arriving_today_rooms = set(frappe.db.sql("""
+    arriving_today_rooms = set(frappe.db.sql_list("""
         SELECT DISTINCT room FROM `tabHotel Reservation`
         WHERE status = 'Reserved'
         AND arrival_date = %s
         AND CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= NOW()
         AND room IS NOT NULL
-    """, (today,), as_list=True, flat=True))
+    """, (today,)))
 
     occupied_rooms = checked_in_rooms | arriving_today_rooms
 
     updated_count = 0
     for room in rooms:
-        # Never touch Out of Order rooms
-        if room.status == "Out of Order":
+        # Never touch a room a human has deliberately blocked
+        if room.status in BLOCKED_STATUSES:
             continue
 
         expected_status = "Occupied" if room.name in occupied_rooms else "Available"

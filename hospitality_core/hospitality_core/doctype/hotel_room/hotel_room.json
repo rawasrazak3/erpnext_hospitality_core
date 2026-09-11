@@ -20,21 +20,24 @@
         {
             "fieldname": "room_number",
             "fieldtype": "Data",
-            "label": "Room Number",
+            "label": "Room / Unit Name",
             "reqd": 1,
-            "unique": 1
+            "unique": 1,
+            "in_list_view": 1,
+            "description": "The name the property calls the unit by, e.g. Pinnacle Suite, Red Hut, Germany."
         },
         {
             "fieldname": "room_type",
             "fieldtype": "Link",
             "label": "Room Type",
             "options": "Hotel Room Type",
-            "reqd": 1
+            "reqd": 1,
+            "in_list_view": 1
         },
         {
             "fieldname": "floor",
             "fieldtype": "Data",
-            "label": "Floor"
+            "label": "Floor / Block"
         },
         {
             "fieldname": "hotel_reception",
@@ -52,14 +55,17 @@
             "fieldname": "status",
             "fieldtype": "Select",
             "label": "Status",
-            "options": "Available\nOccupied\nDirty\nOut of Order",
-            "reqd": 1
+            "options": "Available\nOccupied\nDirty\nMaintenance\nOut of Order",
+            "reqd": 1,
+            "in_list_view": 1,
+            "description": "Maintenance and Out of Order both block the room from being allocated. Maintenance is the temporary, work-in-progress state; Out of Order is a longer block."
         },
         {
             "default": "1",
             "fieldname": "is_enabled",
             "fieldtype": "Check",
-            "label": "Is Enabled"
+            "label": "Is Enabled",
+            "description": "Uncheck to take the unit out of inventory entirely. A disabled room never appears for allocation, whatever its status."
         },
         {
             "fieldname": "warehouse",
@@ -71,7 +77,7 @@
     ],
     "index_web_pages_for_search": 1,
     "links": [],
-    "modified": "2025-01-28 10:05:00.000000",
+    "modified": "2026-09-11 10:00:00.000000",
     "modified_by": "Administrator",
     "module": "Hospitality Core",
     "name": "Hotel Room",

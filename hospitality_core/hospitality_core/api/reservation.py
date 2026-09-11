@@ -3,6 +3,11 @@ from frappe import _
 from frappe.utils import getdate, date_diff, nowdate, get_time
 from datetime import datetime, time as dt_time
 
+from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import (
+    BLOCKED_STATUSES,
+    blocked_reason,
+)
+
 
 def _make_datetime(date_val, time_val, default_time="14:00:00"):
     """
@@ -49,8 +54,8 @@ def check_availability(room, arrival_date, departure_date, ignore_reservation=No
     if not room_status.is_enabled:
         frappe.throw(_("Room {0} is currently disabled/under maintenance.").format(room))
     
-    if room_status.status == "Out of Order":
-        frappe.throw(_("Room {0} is marked Out of Order.").format(room))
+    if room_status.status in BLOCKED_STATUSES:
+        frappe.throw(blocked_reason(room, room_status.status))
 
     # Build full datetime for the new booking
     new_arrival_dt = _make_datetime(arrival_date, arrival_time, "14:00:00")
@@ -116,8 +121,8 @@ def check_bulk_availability(rooms, arrival_date, departure_date, ignore_reservat
             
         if not r.is_enabled:
             conflicts.append(_("Room {0} is currently disabled/under maintenance.").format(room_num))
-        elif r.status == "Out of Order":
-            conflicts.append(_("Room {0} is marked Out of Order.").format(room_num))
+        elif r.status in BLOCKED_STATUSES:
+            conflicts.append(blocked_reason(room_num, r.status))
 
     # 2. Check Overlapping Reservations for all rooms in batch
     # Logic: New Arrival < Existing Departure AND New Departure > Existing Arrival
@@ -188,7 +193,7 @@ def get_available_rooms_for_picker(doctype, txt, searchfield, start, page_len, f
         SELECT name, room_type, status
         FROM `tabHotel Room`
         WHERE is_enabled = 1
-        AND status != 'Out of Order'
+        AND status NOT IN ({blocked})
         AND (%s IS NULL OR room_type = %s)
         AND name LIKE %s
         AND name NOT IN (
@@ -200,10 +205,11 @@ def get_available_rooms_for_picker(doctype, txt, searchfield, start, page_len, f
         )
         ORDER BY name ASC
         LIMIT %s, %s
-    """, (room_type, room_type, f"%{txt}%", ignore or "",
-          f"{departure} {filters.get('departure_time') or '12:00:00'}",
-          f"{arrival} {filters.get('arrival_time') or '14:00:00'}",
-          start, page_len))
+    """.format(blocked=", ".join(["%s"] * len(BLOCKED_STATUSES))),
+        (*BLOCKED_STATUSES, room_type, room_type, f"%{txt}%", ignore or "",
+         f"{departure} {filters.get('departure_time') or '12:00:00'}",
+         f"{arrival} {filters.get('arrival_time') or '14:00:00'}",
+         start, page_len))
 
 def create_folio(reservation_doc):
     """

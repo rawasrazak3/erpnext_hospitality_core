@@ -206,12 +206,18 @@ BOARD_DATE_FIELDS = {"enquired": "creation", "staying": "check_in_date"}
 
 
 @frappe.whitelist()
-def get_board(date_field=None, from_date=None, to_date=None):
+def get_board(date_field=None, from_date=None, to_date=None, room_type=None):
     """Enquiries grouped by status for the Kanban view.
 
     Cards carry the requested rooms and the guest's stated budget, because a pipeline
     that shows only a name is a list of strangers: the agent working it needs to see
     who is asking for four cottages at a high budget before deciding who to call first.
+
+    `room_type` narrows the board to enquiries asking for that type, and the returned
+    `room_demand` counts every type across the date range whatever the narrowing is —
+    that breakdown is the answer to "how much is this room being asked for in these
+    dates", and it has to stay visible while one type is selected or the filter would
+    hide the comparison that makes it useful.
     """
     statuses = frappe.get_all(
         "Hotel Enquiry Status",
@@ -246,6 +252,12 @@ def get_board(date_field=None, from_date=None, to_date=None):
 
     _attach_room_requests(rows)
 
+    # Demand is measured before the room filter, so the chips keep showing every type.
+    room_demand = _summarise_demand(rows)
+
+    if room_type:
+        rows = [r for r in rows if any(x["room_type"] == room_type for x in r["rooms"])]
+
     grouped = {s.name: [] for s in statuses}
     for row in rows:
         grouped.setdefault(row.status, []).append(row)
@@ -255,7 +267,31 @@ def get_board(date_field=None, from_date=None, to_date=None):
         "grouped": grouped,
         "total": len(rows),
         "date_field": date_field or "enquired",
+        "room_type": room_type or None,
+        "room_demand": room_demand,
     }
+
+
+def _summarise_demand(rows):
+    """Enquiries and rooms wanted per room type, for the date range on screen.
+
+    `enquiries` is how many guests asked; `qty` is how many rooms they asked for
+    between them. They differ whenever anyone wants more than one room, and the
+    second is the number that matters against inventory.
+    """
+    demand = {}
+    for row in rows:
+        for line in row.get("rooms") or []:
+            bucket = demand.setdefault(line["room_type"], {"enquiries": 0, "qty": 0})
+            bucket["qty"] += line["qty"]
+        # Count each enquiry once per type however many lines it has for it.
+        for rt in {line["room_type"] for line in (row.get("rooms") or [])}:
+            demand[rt]["enquiries"] += 1
+
+    return [
+        {"room_type": rt, "enquiries": v["enquiries"], "qty": v["qty"]}
+        for rt, v in sorted(demand.items(), key=lambda kv: (-kv[1]["qty"], kv[0]))
+    ]
 
 
 def _attach_room_requests(rows):

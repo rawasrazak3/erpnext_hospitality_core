@@ -1,6 +1,8 @@
 import frappe
 from frappe import _
 from frappe.utils import getdate, flt
+
+from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import BLOCKED_STATUSES
 import json
 
 @frappe.whitelist()
@@ -43,7 +45,9 @@ def get_pos_data(arrival, departure, arrival_time=None, departure_time=None):
     pos_rooms = []
     for room in rooms:
         status = "Available"
-        if not room.is_enabled or room.status == "Out of Order":
+        # Both blocking statuses collapse into one unsellable bucket here; the POS
+        # only needs to know the room cannot be sold, not why.
+        if not room.is_enabled or room.status in BLOCKED_STATUSES:
             status = "Maintenance"
         elif room.name in conflict_rooms:
             status = "Occupied"

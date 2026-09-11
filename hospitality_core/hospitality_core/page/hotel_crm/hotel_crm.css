@@ -680,3 +680,56 @@
 	vertical-align: middle;
 	border-radius: 3px;
 }
+
+/* ------------------------------------------------------------------ room demand chips */
+.hcrm-bf-rooms {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+	padding: 7px 10px 0;
+}
+
+.hcrm-roomchip {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	border: 1px solid var(--border-color);
+	background: var(--fg-color, #fff);
+	border-radius: var(--border-radius-full, 999px);
+	padding: 3px 11px;
+	font-size: var(--text-sm, 12px);
+	color: var(--text-color);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.hcrm-roomchip:hover {
+	border-color: var(--primary, #2490ef);
+}
+
+.hcrm-roomchip.active {
+	background: var(--bg-light-blue, #e7f2fd);
+	border-color: var(--primary, #2490ef);
+	color: var(--primary, #2490ef);
+	font-weight: 600;
+}
+
+/* Enquiry count is the headline number; rooms wanted is the secondary one, since a
+   single enquiry asking for four rooms matters differently to four asking for one. */
+.hcrm-roomchip-n {
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.hcrm-roomchip-q {
+	font-size: var(--text-xs, 11px);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.hcrm-roomchip.active .hcrm-roomchip-q {
+	color: var(--primary, #2490ef);
+	opacity: 0.75;
+}

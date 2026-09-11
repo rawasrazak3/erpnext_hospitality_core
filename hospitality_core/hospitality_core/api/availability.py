@@ -25,6 +25,10 @@ from frappe import _
 from frappe.utils import cint, getdate
 
 from hospitality_core.hospitality_core.api.reservation import _make_datetime
+from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import (
+	BLOCKED_STATUSES,
+	blocked_reason,
+)
 
 # Reservation statuses that occupy a room. "Tentative" is included so a hold placed by
 # the CRM blocks inventory the moment it is created.
@@ -157,6 +161,8 @@ def get_availability(arrival_date, departure_date, room_type=None, arrival_time=
 	      "arrival": ..., "departure": ..., "nights": n,
 	      "room_types": [{room_type, default_rate, total, occupied, held, free}],
 	      "rooms": [{name, room_type, floor, status, available, blocked_by}],
+
+	`out_of_order` counts every room blocked by its status (Maintenance or Out of Order).
 	      "total_free": n,
 	    }
 	"""
@@ -213,8 +219,8 @@ def get_availability(arrival_date, departure_date, room_type=None, arrival_time=
 		bucket["total"] += 1
 
 		blocked_by = None
-		if room.status == "Out of Order":
-			blocked_by = "Out of Order"
+		if room.status in BLOCKED_STATUSES:
+			blocked_by = room.status
 			bucket["out_of_order"] += 1
 		elif room.name in taken:
 			res = taken[room.name]
@@ -302,8 +308,8 @@ def is_room_free(room, arrival_date, departure_date, arrival_time=None, departur
 	enabled, status = frappe.db.get_value("Hotel Room", room, ["is_enabled", "status"]) or (0, None)
 	if not enabled:
 		return {"free": False, "reason": _("Room {0} is disabled.").format(room)}
-	if status == "Out of Order":
-		return {"free": False, "reason": _("Room {0} is Out of Order.").format(room)}
+	if status in BLOCKED_STATUSES:
+		return {"free": False, "reason": blocked_reason(room, status)}
 
 	start, end = _window(arrival_date, departure_date, arrival_time, departure_time)
 	clashes = _overlapping_reservations(start, end, room=room, ignore_reservation=ignore_reservation)
