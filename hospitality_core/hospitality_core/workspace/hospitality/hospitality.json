@@ -83,6 +83,16 @@
   {
    "hidden": 0,
    "is_query_report": 1,
+   "label": "Unanswered Callers",
+   "link_count": 0,
+   "link_to": "Unanswered Callers",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
    "label": "Advance Collection",
    "link_count": 0,
    "link_to": "Advance Collection",
@@ -485,7 +495,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-09-09 21:20:53.343406",
+ "modified": "2026-09-11 18:01:09.673327",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hospitality",

@@ -206,9 +206,12 @@
 			this.$container.html(`
 				<div class="fdc">
 					<div class="fdc-hero">
-						<div>
-							<div class="fdc-greeting">${esc(greeting)}${first_name ? ", " + esc(first_name) : ""}</div>
-							<div class="fdc-subgreeting" data-fdc="date-line"></div>
+						<div class="fdc-brand">
+							<img class="fdc-logo" src="/files/logo.jpeg" alt="" onerror="this.remove()">
+							<div>
+								<div class="fdc-greeting">${esc(greeting)}${first_name ? ", " + esc(first_name) : ""}</div>
+								<div class="fdc-subgreeting" data-fdc="date-line"></div>
+							</div>
 						</div>
 						<div class="fdc-search-wrap" data-fdc="search-wrap">
 							<span class="fdc-search-icon">${svg('<circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path>', 16)}</span>

@@ -610,3 +610,21 @@
 		transition: none;
 	}
 }
+
+/* ------------------------------------------------------------------ brand */
+.fdc-brand {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+/* onerror removes the node, so a missing file leaves the greeting flush left
+   rather than a broken-image glyph next to it. */
+.fdc-logo {
+	width: 40px;
+	height: 40px;
+	object-fit: contain;
+	border-radius: var(--border-radius, 6px);
+	flex: 0 0 auto;
+}

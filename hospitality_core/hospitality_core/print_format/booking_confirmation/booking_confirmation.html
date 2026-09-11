@@ -12,6 +12,8 @@
 		.bv-head { display: flex; justify-content: space-between; align-items: flex-start;
 			border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; margin-bottom: 18px; }
 		.bv-hotel { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+		.bv-brand { display: flex; align-items: center; gap: 12px; }
+		.bv-logo { height: 46px; width: auto; max-width: 130px; object-fit: contain; }
 		.bv-sub { color: #666; font-size: 11px; margin-top: 3px; }
 		.bv-title { text-align: right; }
 		.bv-title .t { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -38,9 +40,12 @@
 	</style>
 
 	<div class="bv-head">
-		<div>
-			<div class="bv-hotel">{{ hotel }}</div>
-			{%- if doc.hotel_reception %}<div class="bv-sub">{{ doc.hotel_reception }}</div>{% endif -%}
+		<div class="bv-brand">
+			<img class="bv-logo" src="/files/logo.jpeg" alt="">
+			<div>
+				<div class="bv-hotel">{{ hotel }}</div>
+				{%- if doc.hotel_reception %}<div class="bv-sub">{{ doc.hotel_reception }}</div>{% endif -%}
+			</div>
 		</div>
 		<div class="bv-title">
 			<div class="t">Booking Confirmation</div>

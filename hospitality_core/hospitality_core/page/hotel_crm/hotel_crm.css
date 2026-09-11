@@ -533,3 +533,150 @@
 	font-size: var(--text-sm, 12px);
 	margin-right: 8px;
 }
+
+/* ------------------------------------------------------------------ board filters */
+.hcrm-board-wrap {
+	display: flex;
+	flex-direction: column;
+	height: calc(100vh - 145px);
+	min-height: 520px;
+	gap: var(--margin-sm, 8px);
+}
+
+.hcrm-board-wrap .hcrm-board {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.hcrm-bf {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	padding: 8px 10px;
+	background: var(--fg-color, #fff);
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius-md, 8px);
+}
+
+.hcrm-bf-label {
+	font-size: var(--text-sm, 12px);
+	color: var(--text-muted);
+	margin: 0;
+	white-space: nowrap;
+}
+
+.hcrm-bf-select,
+.hcrm-bf-date {
+	height: 28px;
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius, 6px);
+	background: var(--control-bg, var(--fg-color, #fff));
+	color: var(--text-color);
+	font-size: var(--text-sm, 12px);
+	padding: 0 8px;
+}
+
+.hcrm-bf-presets {
+	width: auto;
+	flex: 0 0 auto;
+}
+
+.hcrm-bf-custom {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.hcrm-bf-dash {
+	color: var(--text-muted);
+	font-size: var(--text-sm, 12px);
+}
+
+.hcrm-bf-count {
+	margin-left: auto;
+	font-size: var(--text-sm, 12px);
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ card detail */
+.hcrm-row-rooms {
+	font-size: var(--text-xs, 11px);
+	color: var(--text-color);
+	margin-top: 3px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.hcrm-row-pax {
+	color: var(--text-muted);
+}
+
+.hcrm-row-money {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+}
+
+/* The guest's own number, deliberately quieter than our quote. */
+.hcrm-row-budget {
+	font-size: var(--text-xs, 11px);
+	color: var(--text-muted);
+}
+
+.hcrm-row-budget::before {
+	content: "~";
+	opacity: 0.7;
+	margin-right: 1px;
+}
+
+/* ------------------------------------------------------------------ contention */
+.hcrm-avail-rival {
+	font-size: var(--text-xs, 11px);
+	color: var(--text-on-orange, var(--orange-700, #b45309));
+	margin-top: 2px;
+	white-space: nowrap;
+}
+
+.hcrm-contention {
+	margin-top: 8px;
+	border-top: 1px solid var(--border-color);
+	padding-top: 8px;
+}
+
+.hcrm-contention-head {
+	font-size: var(--text-sm, 12px);
+	font-weight: 600;
+	color: var(--text-on-orange, var(--orange-700, #b45309));
+	margin-bottom: 4px;
+}
+
+.hcrm-contention-list {
+	margin: 0;
+	padding-left: 16px;
+	max-height: 88px;
+	overflow-y: auto;
+}
+
+.hcrm-contention-list li {
+	font-size: var(--text-xs, 11px);
+	color: var(--text-color);
+	line-height: 1.5;
+}
+
+.hcrm-rival-meta {
+	color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ brand */
+.hcrm-brand {
+	height: 22px;
+	width: auto;
+	max-width: 90px;
+	object-fit: contain;
+	margin-right: 9px;
+	vertical-align: middle;
+	border-radius: 3px;
+}

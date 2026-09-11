@@ -199,30 +199,92 @@ def set_status(enquiry, status, lost_reason=None, lost_notes=None):
     return {"name": doc.name, "status": doc.status, "status_type": doc.status_type}
 
 
+# Which date a board filter means. "Enquired" is when the lead came in, which is what
+# "who enquired this week" asks; "staying" is when they want the room, which is what
+# "who is arriving next month" asks. They answer different questions, so both are offered.
+BOARD_DATE_FIELDS = {"enquired": "creation", "staying": "check_in_date"}
+
+
 @frappe.whitelist()
-def get_board():
-    """Enquiries grouped by status for the Kanban view."""
+def get_board(date_field=None, from_date=None, to_date=None):
+    """Enquiries grouped by status for the Kanban view.
+
+    Cards carry the requested rooms and the guest's stated budget, because a pipeline
+    that shows only a name is a list of strangers: the agent working it needs to see
+    who is asking for four cottages at a high budget before deciding who to call first.
+    """
     statuses = frappe.get_all(
         "Hotel Enquiry Status",
         fields=["name", "color", "position", "type"],
         order_by="position asc",
     )
+
+    filters = {"status": ["in", [s.name for s in statuses]]}
+
+    column = BOARD_DATE_FIELDS.get(date_field or "enquired", "creation")
+    if from_date and to_date:
+        # Whole-day inclusive on both ends: `creation` is a datetime, so a plain
+        # "<= to_date" would silently drop everything that came in after midnight
+        # on the last day of the range.
+        filters[column] = ["between", [from_date, to_date]]
+    elif from_date:
+        filters[column] = [">=", from_date]
+    elif to_date:
+        filters[column] = ["<=", to_date]
+
     rows = frappe.get_all(
         "Hotel Enquiry",
-        filters={"status": ["in", [s.name for s in statuses]]},
+        filters=filters,
         fields=[
             "name", "guest_name", "mobile_no", "status", "source", "enquiry_owner",
-            "check_in_date", "nights", "quoted_total", "next_follow_up",
+            "check_in_date", "check_out_date", "nights", "quoted_total", "budget",
+            "next_follow_up", "creation", "adults", "children",
         ],
         order_by="modified desc",
         limit=500,
     )
 
+    _attach_room_requests(rows)
+
     grouped = {s.name: [] for s in statuses}
     for row in rows:
         grouped.setdefault(row.status, []).append(row)
 
-    return {"statuses": statuses, "grouped": grouped}
+    return {
+        "statuses": statuses,
+        "grouped": grouped,
+        "total": len(rows),
+        "date_field": date_field or "enquired",
+    }
+
+
+def _attach_room_requests(rows):
+    """Summarise each enquiry's requested rooms in one query rather than per card.
+
+    500 cards would otherwise be 500 child-table reads on every board load.
+    """
+    if not rows:
+        return
+
+    lines = frappe.get_all(
+        "Enquiry Room Line",
+        filters={"parent": ["in", [r.name for r in rows]], "parenttype": "Hotel Enquiry"},
+        fields=["parent", "room_type", "qty"],
+        order_by="idx asc",
+    )
+
+    by_parent = {}
+    for line in lines:
+        if not line.room_type:
+            continue
+        by_parent.setdefault(line.parent, []).append(
+            {"room_type": line.room_type, "qty": cint(line.qty) or 1}
+        )
+
+    for row in rows:
+        requested = by_parent.get(row.name, [])
+        row["rooms"] = requested
+        row["rooms_total"] = sum(r["qty"] for r in requested)
 
 
 def _open_status_names():
@@ -233,19 +295,83 @@ def _open_status_names():
 
 # ---------------------------------------------------------------------- conversion
 @frappe.whitelist()
-def get_stay_availability(arrival_date, departure_date):
+def get_stay_availability(arrival_date, departure_date, exclude_enquiry=None):
     """Live availability for the dates a guest is asking about.
 
     This is what lets an agent answer "do you have two cottages next weekend" without
     leaving the call. Goes through the canonical availability engine so the answer is the
     same one the POS and the tape chart would give.
+
+    On top of the hard numbers it reports *competing demand*: other open enquiries that
+    want an overlapping stay. Those are not holds and deliberately do not reduce `free` —
+    an enquiry is interest, not inventory. But an agent quoting the last cottage needs to
+    know two colleagues are quoting the same one to different guests, which is exactly the
+    double-sell the room-request section existed to prevent and could not see.
     """
     if not (arrival_date and departure_date):
         return None
     try:
-        return availability.get_availability(arrival_date, departure_date)
+        data = availability.get_availability(arrival_date, departure_date)
+        data["contention"] = _competing_enquiries(arrival_date, departure_date, exclude_enquiry)
+        return data
     except Exception as e:
         return {"error": str(e)}
+
+
+def _competing_enquiries(arrival_date, departure_date, exclude_enquiry=None):
+    """Open enquiries whose requested stay overlaps this window, by room type.
+
+    Overlap is the standard half-open rule the availability engine uses: a stay ending on
+    the day another begins is not a clash, because the room turns over that morning.
+    """
+    open_statuses = _open_status_names()
+    if not open_statuses:
+        return {"by_type": {}, "total": 0, "enquiries": []}
+
+    rows = frappe.db.sql(
+        """
+        SELECT e.name, e.guest_name, e.enquiry_owner, e.status,
+               e.check_in_date, e.check_out_date,
+               rl.room_type, rl.qty
+        FROM `tabHotel Enquiry` e
+        LEFT JOIN `tabEnquiry Room Line` rl
+               ON rl.parent = e.name AND rl.parenttype = 'Hotel Enquiry'
+        WHERE e.status IN %(statuses)s
+          AND e.check_in_date IS NOT NULL AND e.check_out_date IS NOT NULL
+          AND e.check_in_date < %(departure)s
+          AND e.check_out_date > %(arrival)s
+          AND (%(exclude)s IS NULL OR e.name != %(exclude)s)
+        ORDER BY e.modified DESC
+        """,
+        {
+            "statuses": tuple(open_statuses),
+            "arrival": arrival_date,
+            "departure": departure_date,
+            "exclude": exclude_enquiry,
+        },
+        as_dict=True,
+    )
+
+    by_type = {}
+    seen = {}
+    for row in rows:
+        if row.room_type:
+            bucket = by_type.setdefault(row.room_type, {"qty": 0, "enquiries": 0})
+            bucket["qty"] += cint(row.qty) or 1
+            bucket["enquiries"] += 1
+        # One entry per enquiry for the tooltip, however many room lines it carries.
+        if row.name not in seen:
+            seen[row.name] = {
+                "name": row.name,
+                "guest_name": row.guest_name,
+                "owner": row.enquiry_owner,
+                "status": row.status,
+                "check_in_date": str(row.check_in_date) if row.check_in_date else None,
+                "check_out_date": str(row.check_out_date) if row.check_out_date else None,
+                "mine": row.enquiry_owner == frappe.session.user,
+            }
+
+    return {"by_type": by_type, "total": len(seen), "enquiries": list(seen.values())[:12]}
 
 
 def get_or_create_guest(enquiry):

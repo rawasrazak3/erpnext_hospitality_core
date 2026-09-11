@@ -12,7 +12,8 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".hpos-left{flex:1;display:flex;flex-direction:column;overflow:hidden}" +
 ".hpos-right{width:400px;background:var(--pos-card);border-left:1px solid var(--pos-border);display:flex;flex-direction:column}" +
 ".hpos-topbar{display:flex;align-items:center;gap:12px;padding:16px 24px;background:var(--pos-card);border-bottom:1px solid var(--pos-border)}" +
-".hpos-topbar .logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--pos-primary),#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:800}" +
+".hpos-topbar .logo-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff;flex:0 0 auto}" +
+".hpos-topbar .logo-icon img{width:100%;height:100%;object-fit:contain;display:block}" +
 ".hpos-topbar h2{margin:0;font-size:20px;font-weight:700;color:var(--pos-text)}" +
 ".hpos-topbar .subtitle{font-size:12px;color:var(--pos-muted);margin:0}" +
 ".hpos-filters{display:flex;gap:12px;padding:16px 24px;background:var(--pos-card);border-bottom:1px solid var(--pos-border);align-items:flex-end;flex-wrap:wrap}" +
@@ -527,7 +528,7 @@ function build_layout(){
     return '<div class="hpos">'+
       '<div class="hpos-left">'+
         '<div class="hpos-topbar">'+
-          '<div class="logo-icon">H</div>'+
+          '<div class="logo-icon"><img src="/files/logo.jpeg" alt=""></div>'+
           '<div><h2>Hotel POS</h2><p class="subtitle">Quick Reservation &amp; Guest Registration</p></div>'+
           '<div class="hpos-modes">'+
             '<button class="hpos-mode active" data-mode="new">New Booking</button>'+

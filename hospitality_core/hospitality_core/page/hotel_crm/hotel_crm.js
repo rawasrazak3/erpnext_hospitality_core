@@ -19,6 +19,13 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 		single_column: true,
 	});
 
+	// Brand mark in the page head rather than inside the three-pane layout: the console
+	// is dense and every pixel of it is working space. onerror drops the node so a
+	// missing file leaves the title where it was, not a broken-image glyph beside it.
+	page.$title_area.prepend(
+		'<img class="hcrm-brand" src="/files/logo.jpeg" alt="" onerror="this.remove()">'
+	);
+
 	// Frappe ships two icon sprites (timeless "#icon-x" and espresso "#es-line-x") and
 	// which ids resolve depends on the active theme, so a hardcoded <use href> renders
 	// blank half the time. These inline paths render on every theme.
@@ -115,7 +122,13 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			this.state.built = false;
 			this.$board_btn.text(this.state.view === 'board' ? __('Console') : __('Pipeline Board'));
 			if (this.state.view === 'board') {
-				this.$body.html('<div class="hcrm-board" id="hcrm-board"></div>');
+				this.$body.html(
+					'<div class="hcrm-board-wrap">' +
+						'<div class="hcrm-board-filters" id="hcrm-board-filters"></div>' +
+						'<div class="hcrm-board" id="hcrm-board"></div>' +
+					'</div>'
+				);
+				this.render_board_filters();
 				this.load_board();
 			} else {
 				this.render_shell();
@@ -867,7 +880,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				return;
 			}
 			// Cheap guard against re-querying the same window on every keystroke.
-			const key = ci + '|' + co;
+			const key = ci + '|' + co + '|' + ((this.state.doc && this.state.doc.name) || '');
 			if (this._availKey === key) return;
 			this._availKey = key;
 
@@ -876,7 +889,12 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			);
 			frappe.call({
 				method: 'hospitality_core.hospitality_core.page.hotel_crm.hotel_crm.get_stay_availability',
-				args: { arrival_date: ci, departure_date: co },
+				args: {
+					arrival_date: ci,
+					departure_date: co,
+					// Without this the enquiry on screen shows up as its own competitor.
+					exclude_enquiry: (this.state.doc && this.state.doc.name) || null,
+				},
 				callback: (r) => {
 					if (this._availKey !== key) return; // a newer request won
 					this.render_availability(r.message);
@@ -897,21 +915,58 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				if (l.room_type) wanted[l.room_type] = (wanted[l.room_type] || 0) + (Number(l.qty) || 1);
 			});
 
+			const contention = data.contention || { by_type: {}, total: 0, enquiries: [] };
+
 			const cells = data.room_types
 				.map((t) => {
 					const need = wanted[t.room_type] || 0;
+					const rival = contention.by_type[t.room_type];
 					let cls = 'ok';
 					if (t.free === 0) cls = 'none';
 					else if (need && t.free < need) cls = 'short';
 					else if (t.free <= 1) cls = 'low';
-					return `<div class="hcrm-avail-cell hcrm-avail-${cls}"
-						title="${t.total} ${__('total')} · ${t.occupied} ${__('booked')} · ${t.held} ${__('held')}">
+
+					const tip = [
+						`${t.total} ${__('total')}`,
+						`${t.occupied} ${__('booked')}`,
+						`${t.held} ${__('held')}`,
+						rival ? `${rival.qty} ${__('wanted by other open enquiries')}` : '',
+					].filter(Boolean).join(' · ');
+
+					return `<div class="hcrm-avail-cell hcrm-avail-${cls}" title="${tip}">
 						<div class="hcrm-avail-n">${t.free}</div>
 						<div class="hcrm-avail-t">${frappe.utils.escape_html(t.room_type)}</div>
 						${need ? `<div class="hcrm-avail-need">${__('need')} ${need}</div>` : ''}
+						${
+							rival
+								? `<div class="hcrm-avail-rival">${__('{0} also wanted', [rival.qty])}</div>`
+								: ''
+						}
 					</div>`;
 				})
 				.join('');
+
+			/* Free rooms are a fact; competing enquiries are a warning. They are kept
+			 * visually separate because an enquiry does not reduce inventory — quoting
+			 * over one is allowed, doing it unknowingly is not. */
+			let warning = '';
+			if (contention.total) {
+				const lines = contention.enquiries
+					.map((e) => {
+						const who = e.mine ? __('you') : (e.owner || __('unassigned'));
+						return `<li>${frappe.utils.escape_html(e.guest_name || e.name)}
+							<span class="hcrm-rival-meta">${frappe.utils.escape_html(e.status || '')} ·
+							${frappe.utils.escape_html(who)}</span></li>`;
+					})
+					.join('');
+				warning = `
+					<div class="hcrm-contention">
+						<div class="hcrm-contention-head">
+							${__('{0} other open enquiries want these dates', [contention.total])}
+						</div>
+						<ul class="hcrm-contention-list">${lines}</ul>
+					</div>`;
+			}
 
 			$('#hcrm-avail').html(`
 				<div class="hcrm-avail">
@@ -919,6 +974,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 						${__('Rooms free')} · ${data.nights} ${__('nights')}
 					</div>
 					<div class="hcrm-avail-row">${cells}</div>
+					${warning}
 				</div>
 			`);
 		},
@@ -1096,9 +1152,83 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 		},
 
 		// ------------------------------------------------------------------ board
+		/* Presets rather than two date pickers for the common questions. A sales lead
+		 * asking "who came in this week" should not have to compute Monday's date. */
+		board_presets() {
+			const d = frappe.datetime;
+			return [
+				{ key: 'all', label: __('All') },
+				{ key: 'today', label: __('Today'), from: d.now_date(), to: d.now_date() },
+				{ key: '7', label: __('Last 7 days'), from: d.add_days(d.now_date(), -6), to: d.now_date() },
+				{ key: '30', label: __('Last 30 days'), from: d.add_days(d.now_date(), -29), to: d.now_date() },
+				{ key: 'custom', label: __('Custom') },
+			];
+		},
+
+		render_board_filters() {
+			const f = this.state.board_filter || (this.state.board_filter = {
+				preset: 'all', date_field: 'enquired', from: null, to: null,
+			});
+			const presets = this.board_presets()
+				.map(
+					(p) => `<button class="hcrm-seg ${p.key === f.preset ? 'active' : ''}"
+						data-preset="${p.key}">${frappe.utils.escape_html(p.label)}</button>`
+				)
+				.join('');
+
+			$('#hcrm-board-filters').html(`
+				<div class="hcrm-bf">
+					<label class="hcrm-bf-label">${__('Show enquiries by')}</label>
+					<select class="hcrm-bf-select" id="hcrm-bf-field">
+						<option value="enquired" ${f.date_field === 'enquired' ? 'selected' : ''}>${__('Date enquired')}</option>
+						<option value="staying" ${f.date_field === 'staying' ? 'selected' : ''}>${__('Date staying')}</option>
+					</select>
+					<div class="hcrm-segmented hcrm-bf-presets">${presets}</div>
+					<div class="hcrm-bf-custom" ${f.preset === 'custom' ? '' : 'hidden'}>
+						<input type="date" class="hcrm-bf-date" id="hcrm-bf-from" value="${f.from || ''}">
+						<span class="hcrm-bf-dash">→</span>
+						<input type="date" class="hcrm-bf-date" id="hcrm-bf-to" value="${f.to || ''}">
+					</div>
+					<span class="hcrm-bf-count" id="hcrm-bf-count"></span>
+				</div>
+			`);
+			this.bind_board_filters();
+		},
+
+		bind_board_filters() {
+			const $f = $('#hcrm-board-filters').off();
+			$f.on('change', '#hcrm-bf-field', (e) => {
+				this.state.board_filter.date_field = $(e.currentTarget).val();
+				this.load_board();
+			});
+			$f.on('click', '.hcrm-seg', (e) => {
+				const key = $(e.currentTarget).data('preset');
+				const preset = this.board_presets().find((p) => p.key === key);
+				const f = this.state.board_filter;
+				f.preset = key;
+				if (key === 'all') { f.from = null; f.to = null; }
+				else if (key !== 'custom') { f.from = preset.from; f.to = preset.to; }
+				this.render_board_filters();
+				// "Custom" only opens the inputs; nothing is filtered until dates are picked.
+				if (key !== 'custom' || (f.from && f.to)) this.load_board();
+			});
+			$f.on('change', '#hcrm-bf-from, #hcrm-bf-to', () => {
+				const f = this.state.board_filter;
+				f.from = $('#hcrm-bf-from').val() || null;
+				f.to = $('#hcrm-bf-to').val() || null;
+				if (f.from || f.to) this.load_board();
+			});
+		},
+
 		load_board() {
+			const f = this.state.board_filter || {};
 			frappe.call({
 				method: 'hospitality_core.hospitality_core.page.hotel_crm.hotel_crm.get_board',
+				args: {
+					date_field: f.date_field || 'enquired',
+					from_date: f.preset === 'all' ? null : f.from,
+					to_date: f.preset === 'all' ? null : f.to,
+				},
 				callback: (r) => r.message && this.render_board(r.message),
 			});
 		},
@@ -1115,29 +1245,65 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 								<span class="hcrm-chip">${rows.length}</span>
 							</div>
 							<div class="hcrm-col-body">
-								${rows
-									.map(
-										(row) => `<div class="hcrm-card-mini" draggable="true" data-name="${row.name}">
-										<div class="hcrm-row-name">${frappe.utils.escape_html(row.guest_name || '')}</div>
-										<div class="hcrm-row-meta">${frappe.utils.escape_html(row.mobile_no || '')}</div>
-										<div class="hcrm-row-foot">
-											<span class="hcrm-row-stay">${
-												row.check_in_date
-													? frappe.datetime.str_to_user(row.check_in_date) +
-													  ' · ' + (row.nights || 0) + 'N'
-													: __('No dates')
-											}</span>
-											${row.quoted_total ? `<span class="hcrm-row-amt">${format_currency(row.quoted_total)}</span>` : ''}
-										</div>
-									</div>`
-									)
-									.join('')}
+								${rows.map((row) => this.board_card(row)).join('')}
 							</div>
 						</div>`;
 					})
 					.join('')
 			);
+			$('#hcrm-bf-count').text(
+				data.total === undefined ? '' : __('{0} enquiries', [data.total])
+			);
 			this.bind_board();
+		},
+
+		/* What an agent triages on: who, what they want, and what it is worth. Budget is
+		 * the guest's own number and quote is ours; when both exist they are shown
+		 * together, because a quote far above a stated budget is the signal to
+		 * renegotiate rather than chase. */
+		board_card(row) {
+			const esc = frappe.utils.escape_html;
+			const rooms = (row.rooms || [])
+				.map((r) => `${r.qty}× ${esc(r.room_type)}`)
+				.join(', ');
+
+			const pax = [
+				row.adults ? `${row.adults} ${__('ad')}` : '',
+				row.children ? `${row.children} ${__('ch')}` : '',
+			].filter(Boolean).join(' ');
+
+			const money = [];
+			if (row.budget) {
+				money.push(
+					`<span class="hcrm-row-budget" title="${__('Guest budget')}">${format_currency(row.budget)}</span>`
+				);
+			}
+			if (row.quoted_total) {
+				money.push(
+					`<span class="hcrm-row-amt" title="${__('Quoted')}">${format_currency(row.quoted_total)}</span>`
+				);
+			}
+
+			return `<div class="hcrm-card-mini" draggable="true" data-name="${row.name}">
+				<div class="hcrm-row-name">${esc(row.guest_name || '')}</div>
+				<div class="hcrm-row-meta">${esc(row.mobile_no || '')}</div>
+				${
+					rooms
+						? `<div class="hcrm-row-rooms" title="${__('Rooms requested')}">${rooms}${
+								pax ? ` <span class="hcrm-row-pax">· ${pax}</span>` : ''
+						  }</div>`
+						: ''
+				}
+				<div class="hcrm-row-foot">
+					<span class="hcrm-row-stay">${
+						row.check_in_date
+							? frappe.datetime.str_to_user(row.check_in_date) +
+							  ' · ' + (row.nights || 0) + 'N'
+							: __('No dates')
+					}</span>
+					<span class="hcrm-row-money">${money.join('')}</span>
+				</div>
+			</div>`;
 		},
 
 		bind_board() {
