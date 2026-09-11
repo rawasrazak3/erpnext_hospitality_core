@@ -17,29 +17,34 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
  * Density is deliberate: a front desk works this screen with a guest waiting, so the
  * room grid fits more per screen and the type/rate/capacity of a room are readable
  * without leaning in. */
-/* Palette taken from the logo — muted gold on near-black — rather than an invented one.
- * Used sparingly and only where it carries meaning: what is selected, what is primary,
- * and the money. Everything structural stays on Frappe's tokens so the page still
- * follows the active theme.
+/* Indigo as the single decisive colour: selection, primary actions, focus. It is
+ * saturated on purpose — selecting a room is the one thing that happens on this screen
+ * over and over, and it should be unmistakable from across a desk.
  *
- * --gold is deliberately desaturated. A saturated gold next to the semantic green and
- * red of the status dots reads as a fourth status rather than as branding. */
-".hpos{--gold:#a8803c;--gold-lift:#c09a52;--gold-soft:rgba(168,128,60,.10);" +
-  "--gold-line:rgba(168,128,60,.34);--charcoal:#22252a;" +
-  "--p:var(--primary,#2490ef);--ok:var(--green-500,#22c55e);--bad:var(--red-500,#e24c4c);" +
-  "--warn:var(--orange-500,#f59e0b);--card:var(--fg-color,#fff);--sunken:var(--subtle-fg,#f4f5f6);" +
-  "--line:var(--border-color,#e2e8f0);--ink:var(--text-color,#1f272e);--dim:var(--text-muted,#6b7684);" +
-  "--r:var(--border-radius-md,8px);" +
+ * Room types get their own hue from an eight-colour ramp so the grid can be scanned by
+ * type. Those are identity, never state: they sit on the card's left edge and in the
+ * type label, and they never touch the border or fill that mean "selected". The green
+ * and red availability dots stay the only semantic colours. */
+".hpos{--p:#4f46e5;--p-lift:#6366f1;--p-deep:#4338ca;--p-soft:#eef2ff;--p-line:#c7d2fe;" +
+  "--ok:var(--green-500,#22c55e);--bad:var(--red-500,#e24c4c);--warn:var(--orange-500,#f59e0b);" +
+  "--card:var(--fg-color,#fff);--sunken:var(--subtle-fg,#f4f5f6);--line:var(--border-color,#e2e8f0);" +
+  "--ink:var(--text-color,#1f272e);--dim:var(--text-muted,#6b7684);--r:var(--border-radius-md,8px);" +
   "display:flex;height:calc(100vh - 80px);background:var(--bg-color,#f4f5f6);overflow:hidden;" +
   "color:var(--ink);font-size:var(--text-base,13px)}",
-/* Gold holds up on a dark ground, but the tints and the charcoal have to lift or they
-   disappear into it. */
-"[data-theme='dark'] .hpos{--gold:#c9a462;--gold-lift:#dcbb7d;--gold-soft:rgba(201,164,98,.13);" +
-  "--gold-line:rgba(201,164,98,.38);--charcoal:#e9ecef}",
+/* On a dark ground the pale tints turn into glare, so they invert to a low-alpha wash. */
+"[data-theme='dark'] .hpos{--p:#818cf8;--p-lift:#a5b4fc;--p-deep:#6366f1;" +
+  "--p-soft:rgba(129,140,248,.14);--p-line:rgba(129,140,248,.42)}",
+
+/* Room-type ramp. Distinct in hue rather than lightness, so they stay apart for the
+   most common colour-vision deficiencies and at a glance on a busy grid. */
+".hpos .rt-0{--rt:#4f46e5}.hpos .rt-1{--rt:#0891b2}.hpos .rt-2{--rt:#059669}" +
+  ".hpos .rt-3{--rt:#c2410c}.hpos .rt-4{--rt:#7c3aed}.hpos .rt-5{--rt:#0284c7}" +
+  ".hpos .rt-6{--rt:#b45309}.hpos .rt-7{--rt:#be185d}",
+".hpos-room .rm-type{color:var(--rt,var(--dim))}",
 ".hpos *{box-sizing:border-box}",
 ".hpos-left{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}",
 ".hpos-right{width:360px;flex:0 0 360px;background:var(--card);border-left:1px solid var(--line);" +
-  "border-top:2px solid var(--gold);" +
+  "border-top:2px solid var(--p);" +
   "display:flex;flex-direction:column;min-height:0;overflow:hidden}",
 
 /* Both panes are header / scrolling body / pinned footer, so both have to be flex
@@ -77,7 +82,7 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".hpos-fg input:focus{outline:none;border-color:var(--p);box-shadow:0 0 0 2px var(--awesomebar-focus-bg,rgba(36,144,239,.16))}",
 ".hpos-btn{height:30px;padding:0 14px;border:none;border-radius:var(--border-radius,6px);" +
   "font-size:var(--text-sm,12px);font-weight:600;cursor:pointer;font-family:inherit}",
-".hpos-btn-primary{background:var(--charcoal);color:var(--fg-color,#fff)}",
+".hpos-btn-primary{background:var(--p);color:#fff}",
 ".hpos-btn-primary:hover{filter:brightness(.94)}",
 
 /* ---------------------------------------------------------------- stats */
@@ -101,8 +106,9 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".hpos-tab{padding:4px 12px;border-radius:var(--border-radius-full,999px);font-size:var(--text-sm,12px);" +
   "font-weight:500;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--dim);" +
   "white-space:nowrap;font-family:inherit;transition:border-color .12s,color .12s}",
-".hpos-tab:hover{border-color:var(--gold-line);color:var(--gold)}",
-".hpos-tab.active{background:var(--charcoal);color:var(--fg-color,#fff);border-color:var(--charcoal);font-weight:600}",
+".hpos-tab:hover{border-color:var(--p-line);color:var(--p)}",
+".hpos-tab.active{background:var(--p);color:#fff;border-color:var(--p);font-weight:600;" +
+  "box-shadow:0 1px 6px rgba(79,70,229,.32)}",
 
 /* ---------------------------------------------------------------- room grid */
 ".hpos-grid{flex:1 1 auto;min-height:0;padding:12px 16px;overflow-y:auto;display:grid;" +
@@ -110,19 +116,25 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 
 /* Fixed row height plus a column layout is what stops the cards going ragged when one
    room has a weekend rate or an extra badge and its neighbour does not. */
-/* No min-height and no auto margins. .rm-rate used to carry margin-top:auto to line the
-   rates up, but .rm-amen comes after it in the DOM, so on a card with a weekend-rate line
-   the auto margin had nothing safe to absorb and the content escaped upward over the room
-   name. Grid stretch already gives every card in a row the same height; overflow:hidden is
-   the backstop so nothing can ever paint outside its own card again. */
-".hpos-room{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;" +
-  "cursor:pointer;position:relative;display:flex;flex-direction:column;gap:4px;overflow:hidden;" +
-  "transition:border-color .12s,box-shadow .12s,background .12s}",
-".hpos-room:hover:not(.off):not(.occ){border-color:var(--gold-line);box-shadow:var(--shadow-sm,0 1px 4px rgba(0,0,0,.08))}",
-".hpos-room.sel{border-color:var(--gold-line);box-shadow:inset 0 0 0 1px var(--gold-line);background:var(--gold-soft)}",
+/* The room name kept disappearing, and this is why: .rm-num and .rm-type set
+   overflow:hidden to get a horizontal ellipsis, and overflow:hidden gives a flex item an
+   automatic minimum size of ZERO. So when grid stretch pinned the card to the row height
+   and the content did not fit, those two were the only children able to give — they
+   collapsed vertically and clipped their own text. The card looked empty at the top.
+
+   "flex:0 0 auto" on every child is the fix: nothing shrinks, so the card grows to its
+   content and the ellipsis stays a horizontal concern only. */
+".hpos-room{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--rt,var(--line));" +
+  "border-radius:var(--r);padding:11px 12px;cursor:pointer;position:relative;display:flex;" +
+  "flex-direction:column;gap:4px;transition:border-color .12s,box-shadow .12s,background .12s}",
+".hpos-room > *{flex:0 0 auto;min-height:0}",
+".hpos-room:hover:not(.off):not(.occ){border-color:var(--p-line);box-shadow:0 2px 10px rgba(0,0,0,.07)}",
+".hpos-room.sel{border-color:var(--p);border-left-color:var(--p);background:var(--p-soft);" +
+  "box-shadow:inset 0 0 0 1px var(--p),0 2px 8px rgba(79,70,229,.18)}",
+".hpos-room.sel .rm-type{color:var(--p-deep)}",
 ".hpos-room.sel::after{content:'\\2713';position:absolute;top:8px;right:9px;width:17px;height:17px;" +
-  "background:var(--gold);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;" +
-  "font-size:10px;font-weight:700}",
+  "background:var(--p);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;" +
+  "font-size:11px;font-weight:700;box-shadow:0 1px 4px rgba(79,70,229,.5)}",
 ".hpos-room.occ{opacity:.55;cursor:not-allowed;background:var(--sunken)}",
 ".hpos-room.off{opacity:.45;cursor:not-allowed;border-style:dashed}",
 ".hpos-room .rm-num{font-size:var(--text-base,13px);font-weight:600;color:var(--ink);line-height:1.25;" +
@@ -135,7 +147,7 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".hpos-room .rm-dot{position:absolute;bottom:11px;right:11px;width:7px;height:7px;border-radius:50%}",
 ".hpos-room .rm-meta{display:flex;align-items:center;gap:4px;flex-wrap:wrap}",
 ".rm-cap{display:inline-flex;align-items:center;gap:3px;font-size:var(--text-xs,11px);font-weight:600;" +
-  "color:var(--gold);background:var(--gold-soft);border-radius:var(--border-radius-full,999px);padding:1px 7px}",
+  "color:var(--p-deep);background:var(--p-soft);border-radius:var(--border-radius-full,999px);padding:1px 7px}",
 ".rm-bed{display:inline-flex;align-items:center;font-size:var(--text-xs,11px);color:var(--dim);" +
   "background:var(--sunken);border-radius:var(--border-radius-full,999px);padding:1px 7px}",
 ".rm-amen{display:flex;gap:3px;flex-wrap:wrap}",
@@ -175,9 +187,9 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 
 /* ---------------------------------------------------------------- guest form */
 ".guest-toggle{width:100%;padding:7px;border:1px dashed var(--line);border-radius:var(--border-radius,6px);" +
-  "background:transparent;color:var(--gold);font-size:var(--text-sm,12px);font-weight:600;cursor:pointer;" +
+  "background:transparent;color:var(--p);font-size:var(--text-sm,12px);font-weight:600;cursor:pointer;" +
   "font-family:inherit;margin-bottom:10px}",
-".guest-toggle:hover{background:var(--gold-soft);border-color:var(--gold-line)}",
+".guest-toggle:hover{background:var(--p-soft);border-color:var(--p-line)}",
 ".guest-form{background:var(--sunken);padding:12px;border-radius:var(--r);display:none}",
 ".gf-row{margin-bottom:8px}",
 ".gf-row:last-child{margin-bottom:0}",
@@ -200,11 +212,11 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".cart-footer{flex:0 0 auto;padding:12px 16px;background:var(--card);border-top:1px solid var(--line)}",
 ".cart-total{display:flex;justify-content:space-between;align-items:baseline;font-size:var(--text-lg,15px);" +
   "font-weight:700;color:var(--ink);margin-bottom:9px;font-variant-numeric:tabular-nums}",
-".cart-total span:last-child{color:var(--gold)}",
-".btn-book{width:100%;padding:10px;background:linear-gradient(180deg,var(--gold-lift),var(--gold));color:#fff;border:none;" +
+".cart-total span:last-child{color:var(--p-deep)}",
+".btn-book{width:100%;padding:11px;background:linear-gradient(180deg,var(--p-lift),var(--p));color:#fff;border:none;" +
   "border-radius:var(--border-radius,6px);font-size:var(--text-base,13px);font-weight:600;cursor:pointer;" +
   "font-family:inherit;transition:filter .12s}",
-".btn-book:hover:not(:disabled){filter:brightness(.94)}",
+".btn-book:hover:not(:disabled){filter:brightness(1.06);box-shadow:0 3px 12px rgba(79,70,229,.34)}",
 ".btn-book:disabled{opacity:.45;cursor:not-allowed}",
 
 /* ---------------------------------------------------------------- arrivals (was entirely unstyled) */
@@ -219,8 +231,8 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".arr-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 12px;" +
   "background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:6px;" +
   "cursor:pointer;transition:border-color .12s}",
-".arr-row:hover{border-color:var(--gold-line)}",
-".arr-row.active{border-color:var(--gold-line);box-shadow:inset 0 0 0 1px var(--gold-line);background:var(--gold-soft)}",
+".arr-row:hover{border-color:var(--p-line)}",
+".arr-row.active{border-color:var(--p);box-shadow:inset 0 0 0 1px var(--p);background:var(--p-soft)}",
 ".arr-main{min-width:0;flex:1 1 auto}",
 ".arr-name{font-size:var(--text-base,13px);font-weight:600;color:var(--ink);" +
   "overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
@@ -231,7 +243,7 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
   "border-radius:var(--border-radius-full,999px);background:var(--sunken);color:var(--dim);white-space:nowrap}",
 ".arr-confirmed{background:var(--bg-green,#e6f5ea);color:var(--text-on-green,#15803d)}",
 ".arr-tentative{background:var(--bg-orange,#fff3e0);color:var(--text-on-orange,#b45309)}",
-".arr-checkedin{background:var(--gold-soft);color:var(--gold)}",
+".arr-checkedin{background:var(--p-soft);color:var(--p-deep)}",
 ".arr-walkin{background:var(--bg-light-gray,var(--sunken));color:var(--dim)}",
 ".arr-tag{display:inline-block;font-size:var(--text-xs,11px);color:var(--dim);margin-top:3px}",
 ".arr-lines{margin-bottom:4px}",
@@ -577,6 +589,12 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                 if(room.status==='Occupied'){ cls+=' occ'; dot='dot-occ'; }
                 else if(room.status==='Maintenance'){ cls+=' off'; dot='dot-maint'; }
                 if(is_sel) cls+=' sel';
+
+                // A colour per room type so the grid is scannable by type without reading
+                // every label. Taken from the room type's position in the loaded list
+                // rather than a hash of its name: hashing collided on two of this hotel's
+                // eight types, which defeats the point of colour-coding them at all.
+                cls += ' rt-' + type_hue(room.room_type, self.state.room_types);
                 var currency = frappe.boot.sysdefaults.currency || 'INR';
 
                 // Capacity and bed layout: what the guest is actually buying.
@@ -778,6 +796,23 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
     window.pos_app = POS;
     POS.init();
 };
+
+var RT_HUES = 8;
+
+function type_hue(name, types){
+    var i = -1;
+    (types || []).some(function(t, idx){
+        if((t && t.name ? t.name : t) === name){ i = idx; return true; }
+        return false;
+    });
+    if(i > -1) return i % RT_HUES;
+
+    // Not in the list (a room whose type was filtered out, or removed): fall back to a
+    // hash so it still gets a stable colour rather than an unstyled edge.
+    var h = 0, str = String(name || '');
+    for(var c = 0; c < str.length; c++){ h = (h * 31 + str.charCodeAt(c)) >>> 0; }
+    return h % RT_HUES;
+}
 
 function build_layout(){
     var today = frappe.datetime.now_date();
