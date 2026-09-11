@@ -10,7 +10,13 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".hpos{font-family:'Inter',sans-serif;display:flex;height:calc(100vh - 80px);background:var(--pos-bg);gap:0;overflow:hidden}" +
 ".hpos *{box-sizing:border-box}" +
 ".hpos-left{flex:1;display:flex;flex-direction:column;overflow:hidden}" +
-".hpos-right{width:400px;background:var(--pos-card);border-left:1px solid var(--pos-border);display:flex;flex-direction:column}" +
+".hpos-right{width:400px;background:var(--pos-card);border-left:1px solid var(--pos-border);display:flex;flex-direction:column;min-height:0;overflow:hidden}" +
+/* Both panes are header / scrolling body / pinned footer, so both have to be flex
+   columns themselves. min-height:0 is the part that actually matters: a flex item
+   defaults to min-height:auto, which makes it grow to fit its content and silently
+   disables the overflow-y:auto on .cart-body inside it. */
+"#pos-cart-pane,#pos-arr-detail{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}" +
+"#pos-cart-pane.pane-hidden,#pos-arr-detail.pane-hidden{display:none}" +
 ".hpos-topbar{display:flex;align-items:center;gap:12px;padding:16px 24px;background:var(--pos-card);border-bottom:1px solid var(--pos-border)}" +
 ".hpos-topbar .logo-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff;flex:0 0 auto}" +
 ".hpos-topbar .logo-icon img{width:100%;height:100%;object-fit:contain;display:block}" +
@@ -46,13 +52,23 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".hpos-room .rm-rate{font-size:14px;font-weight:700;color:var(--pos-success)}" +
 ".hpos-room .rm-rate span{font-size:10px;font-weight:400;color:var(--pos-muted)}" +
 ".hpos-room .rm-dot{position:absolute;bottom:12px;right:12px;width:8px;height:8px;border-radius:50%}" +
+".hpos-room .rm-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}" +
+".rm-cap{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--pos-primary-dark);background:#eef2ff;border-radius:20px;padding:2px 7px;white-space:nowrap}" +
+".rm-bed{display:inline-flex;align-items:center;font-size:10px;font-weight:600;color:var(--pos-muted);background:var(--pos-bg);border-radius:20px;padding:2px 7px;white-space:nowrap}" +
+".rm-amen{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;min-height:16px}" +
+".rm-amen i{font-style:normal;font-size:12px;line-height:1;opacity:.85;cursor:help}" +
+".rm-wknd{display:block;font-size:9px;color:var(--pos-warning);font-weight:700;margin-top:2px}" +
+".rm-stay{display:block;font-size:10px;color:var(--pos-muted);font-weight:500;margin-top:1px}" +
+".ci-warn{font-size:11px;color:var(--pos-danger);margin-top:4px;font-weight:600}" +
+".ci-amen{font-size:11px;color:var(--pos-muted);margin-top:2px}" +
+".cart-note{font-size:11px;color:var(--pos-muted);padding:8px 0 0;border-top:1px dashed var(--pos-border);margin-top:8px}" +
 ".dot-avail{background:var(--pos-success);box-shadow:0 0 6px var(--pos-success)}" +
 ".dot-occ{background:var(--pos-danger)}" +
 ".dot-maint{background:var(--pos-warning)}" +
-".cart-hdr{padding:20px;border-bottom:1px solid var(--pos-border)}" +
+".cart-hdr{flex:0 0 auto;padding:20px;border-bottom:1px solid var(--pos-border)}" +
 ".cart-hdr h3{margin:0;font-size:16px;font-weight:700;color:var(--pos-text)}" +
 ".cart-hdr .nights{font-size:12px;color:var(--pos-muted);margin-top:2px}" +
-".cart-body{flex:1;overflow-y:auto;padding:16px 20px}" +
+".cart-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:16px 20px}" +
 ".cart-sec{font-size:10px;font-weight:700;color:var(--pos-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:16px}" +
 ".cart-sec:first-child{margin-top:0}" +
 ".cart-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--pos-border)}" +
@@ -71,7 +87,7 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".gf-row label{font-size:10px;font-weight:600;color:var(--pos-muted);text-transform:uppercase;display:block;margin-bottom:3px}" +
 ".gf-row input, .gf-row select{width:100%;padding:7px 10px;border:1px solid var(--pos-border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff}" +
 ".gf-row input:focus, .gf-row select:focus{outline:none;border-color:var(--pos-primary)}" +
-".cart-footer{padding:16px 20px;background:var(--pos-card);border-top:1px solid var(--pos-border)}" +
+".cart-footer{flex:0 0 auto;padding:16px 20px;background:var(--pos-card);border-top:1px solid var(--pos-border)}" +
 ".cart-total{display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:var(--pos-text);margin-bottom:12px}" +
 ".btn-book{width:100%;padding:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;box-shadow:0 4px 14px rgba(99,102,241,.35)}" +
 ".btn-book:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,.45)}" +
@@ -100,7 +116,8 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                  departure: frappe.datetime.add_days(frappe.datetime.now_date(),1),
                  arrival_time: '',
                  departure_time: '12:00',
-                 nights:1, filter_type:'All', mode:'new', arrival_doc:null },
+                 nights:1, filter_type:'All', mode:'new', arrival_doc:null,
+                 adults:1, children:0 },
 
         init: function(){
             this.bind();
@@ -110,6 +127,13 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
         bind: function(){
             var self = this;
             $('#pos-search-btn').on('click', function(){ self.on_search(); });
+            // Party size drives the capacity warning in the cart, so keep state in
+            // step as it is typed rather than only reading it at checkout.
+            $('#pos-adults, #pos-children').on('input change', function(){
+                self.state.adults = cint($('#pos-adults').val());
+                self.state.children = cint($('#pos-children').val());
+                self.render_cart();
+            });
             $('#btn-new-guest').on('click', function(){
                 self.state.is_new_guest = !self.state.is_new_guest;
                 if(self.state.is_new_guest){
@@ -143,9 +167,9 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 
             var arrivals = mode === 'arrivals';
             $('#pos-arrivals').toggle(arrivals);
-            $('#pos-arr-detail').toggle(arrivals);
+            $('#pos-arr-detail').toggleClass('pane-hidden', !arrivals);
             $('#pos-grid, #pos-type-tabs, .hpos-filters, .hpos-stats').toggle(!arrivals);
-            $('#pos-cart-pane').toggle(!arrivals);
+            $('#pos-cart-pane').toggleClass('pane-hidden', arrivals);
 
             if(arrivals){ this.load_arrivals(); }
         },
@@ -311,6 +335,8 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
             this.state.departure = $('#pos-dep').val();
             this.state.arrival_time = $('#pos-arr-time').val();
             this.state.departure_time = $('#pos-dep-time').val();
+            this.state.adults = cint($('#pos-adults').val());
+            this.state.children = cint($('#pos-children').val());
             this.state.nights = frappe.datetime.get_diff(this.state.departure, this.state.arrival);
             if(this.state.nights <= 0){ frappe.msgprint('Departure must be after Arrival.'); return; }
             this.state.cart = [];
@@ -389,10 +415,42 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                 else if(room.status==='Maintenance'){ cls+=' off'; dot='dot-maint'; }
                 if(is_sel) cls+=' sel';
                 var currency = frappe.boot.sysdefaults.currency || 'INR';
+
+                // Capacity and bed layout: what the guest is actually buying.
+                var meta = '';
+                if(room.max_occupancy){
+                    meta += '<span class="rm-cap" title="'+__('Maximum guests allowed')+'">'+
+                            '\uD83D\uDC64 '+__('Max {0}', [room.max_occupancy])+'</span>';
+                }
+                if(room.bedroom_configuration){
+                    meta += '<span class="rm-bed">'+frappe.utils.escape_html(room.bedroom_configuration)+'</span>';
+                }
+
+                var amen = (room.amenities || []).map(function(a){
+                    return '<i title="'+frappe.utils.escape_html(a.label)+'">'+a.icon+'</i>';
+                }).join('');
+
+                // Weekend nights cost more, so the flat nightly figure alone would
+                // understate the stay. Show both when they disagree.
+                var stay = '';
+                if(room.stay_total && self.state.nights){
+                    var flat = room.rate * self.state.nights;
+                    if(Math.abs(room.stay_total - flat) > 0.5){
+                        stay = '<span class="rm-stay">'+__('Stay')+': '+
+                               format_currency(room.stay_total,currency)+'</span>';
+                    }
+                }
+                var wknd = room.has_weekend_premium
+                    ? '<span class="rm-wknd" title="'+__('Charged on Saturday, Sunday and holiday nights')+'">'+
+                      __('Weekend/Holiday')+' '+format_currency(room.weekend_rate,currency)+'</span>'
+                    : '';
+
                 var $card = $('<div class="'+cls+'">'+
-                    '<div class="rm-num">'+room.name+'</div>'+
-                    '<div class="rm-type">'+room.room_type+'</div>'+
-                    '<div class="rm-rate">'+format_currency(room.rate,currency)+' <span>/night</span></div>'+
+                    '<div class="rm-num">'+frappe.utils.escape_html(room.name)+'</div>'+
+                    '<div class="rm-type">'+frappe.utils.escape_html(room.room_type)+'</div>'+
+                    (meta ? '<div class="rm-meta">'+meta+'</div>' : '')+
+                    '<div class="rm-rate">'+format_currency(room.rate,currency)+' <span>/night</span>'+wknd+stay+'</div>'+
+                    (amen ? '<div class="rm-amen">'+amen+'</div>' : '')+
                     '<div class="rm-dot '+dot+'"></div>'+
                 '</div>');
                 if(room.status==='Available'){
@@ -423,20 +481,55 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
             if(!self.state.cart.length){
                 $list.html('<div class="cart-empty"><div class="icon">🛒</div>Select rooms from the left panel</div>');
             } else {
+                var has_weekend = false;
+                var capacity = 0;
                 self.state.cart.forEach(function(room){
-                    var rt = room.rate * self.state.nights;
+                    // stay_total is priced night by night on the server, so a stay
+                    // spanning a weekend is charged correctly instead of rate x nights.
+                    var rt = room.stay_total || (room.rate * self.state.nights);
                     total += rt;
+                    capacity += (room.max_occupancy || 0);
+
+                    var sub = frappe.utils.escape_html(room.room_type);
+                    if(room.stay_total && Math.abs(room.stay_total - room.rate*self.state.nights) > 0.5){
+                        has_weekend = true;
+                        sub += ' &middot; '+format_currency(room.average_nightly,currency)+
+                               ' '+__('avg')+' &times; '+self.state.nights+' '+__('nights');
+                    } else {
+                        sub += ' &middot; '+format_currency(room.rate,currency)+
+                               ' &times; '+self.state.nights+' '+__('nights');
+                    }
+
+                    var amen = (room.amenities || []).map(function(a){ return a.icon; }).join(' ');
+                    var cap = room.max_occupancy
+                        ? '<div class="ci-amen">\uD83D\uDC64 '+__('Max {0}', [room.max_occupancy])+
+                          (amen ? ' &nbsp; '+amen : '')+'</div>'
+                        : (amen ? '<div class="ci-amen">'+amen+'</div>' : '');
+
                     $list.append(
                         '<div class="cart-item">'+
-                          '<div><div class="ci-name">'+room.name+'</div>'+
-                          '<div class="ci-sub">'+room.room_type+' &middot; '+format_currency(room.rate,currency)+' &times; '+self.state.nights+' nights</div></div>'+
+                          '<div><div class="ci-name">'+frappe.utils.escape_html(room.name)+'</div>'+
+                          '<div class="ci-sub">'+sub+'</div>'+cap+'</div>'+
                           '<div style="display:flex;align-items:center">'+
                             '<div class="ci-price">'+format_currency(rt,currency)+'</div>'+
-                            '<button class="ci-rm" data-room="'+room.name+'">&times;</button>'+
+                            '<button class="ci-rm" data-room="'+frappe.utils.escape_html(room.name)+'">&times;</button>'+
                           '</div>'+
                         '</div>'
                     );
                 });
+
+                // Warn the moment the party no longer fits what is in the cart.
+                var guests = cint(self.state.adults) + cint(self.state.children);
+                if(guests && capacity && guests > capacity){
+                    $list.append('<div class="ci-warn">\u26A0 '+
+                        __('{0} guests exceed the {1} these rooms allow. Add a room or an extra bed.',
+                           [guests, capacity])+'</div>');
+                }
+                if(has_weekend){
+                    $list.append('<div class="cart-note">'+
+                        __('Totals include the weekend tariff for Saturday, Sunday and holiday nights.')+
+                        '</div>');
+                }
                 $list.off('click','.ci-rm').on('click','.ci-rm',function(){
                     var rn = $(this).data('room');
                     var rm = self.state.rooms.find(function(r){return r.name===rn});
@@ -480,6 +573,7 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                 arrival_time: self.state.arrival_time || '',
                 departure_time: self.state.departure_time || '',
                 adults: $('#pos-adults').val() || 1,
+                children: $('#pos-children').val() || 0,
                 rooms: self.state.cart.map(function(c){return c.name}),
                 is_new_guest: self.state.is_new_guest
             };
@@ -540,7 +634,8 @@ function build_layout(){
           '<div class="hpos-fg"><label>Check-in Time</label><input type="time" id="pos-arr-time" value="" style="width:110px" placeholder="Auto"></div>'+
           '<div class="hpos-fg"><label>Check-out</label><input type="date" id="pos-dep" value="'+tomorrow+'"></div>'+
           '<div class="hpos-fg"><label>Check-out Time</label><input type="time" id="pos-dep-time" value="12:00" style="width:110px"></div>'+
-          '<div class="hpos-fg"><label>Adults</label><input type="number" id="pos-adults" value="1" min="1" max="10" style="width:70px"></div>'+
+          '<div class="hpos-fg"><label>Adults</label><input type="number" id="pos-adults" value="1" min="1" max="30" style="width:70px"></div>'+
+          '<div class="hpos-fg"><label>Children</label><input type="number" id="pos-children" value="0" min="0" max="30" style="width:70px"></div>'+
           '<button class="hpos-btn hpos-btn-primary" id="pos-search-btn">Check Availability</button>'+
         '</div>'+
         '<div class="hpos-stats">'+
@@ -561,7 +656,7 @@ function build_layout(){
         '</div>'+
       '</div>'+
       '<div class="hpos-right">'+
-        '<div id="pos-arr-detail" style="display:none"></div>'+
+        '<div id="pos-arr-detail" class="pane-hidden"></div>'+
         '<div id="pos-cart-pane">'+
         '<div class="cart-hdr"><h3>Booking Summary</h3><div class="nights"><span id="cart-nights">1</span> Night(s) Stay</div></div>'+
         '<div class="cart-body">'+

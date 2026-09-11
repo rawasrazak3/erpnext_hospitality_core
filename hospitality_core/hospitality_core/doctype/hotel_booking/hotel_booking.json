@@ -25,9 +25,12 @@
   "nights",
   "adults",
   "children",
+  "extra_beds_child",
+  "extra_beds_adult",
   "hold_expiry",
   "sec_rooms",
   "rooms",
+  "room_details_preview",
   "sec_money",
   "total_amount",
   "advance_required",
@@ -257,11 +260,30 @@
    "options": "Hotel Booking",
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "room_details_preview",
+   "fieldtype": "HTML",
+   "label": "Room Details & Stay Quote"
+  },
+  {
+   "fieldname": "extra_beds_adult",
+   "fieldtype": "Int",
+   "label": "Extra Beds (Adult)",
+   "default": "0",
+   "description": "Beds beyond the room's Max Allowed. Charged per night."
+  },
+  {
+   "fieldname": "extra_beds_child",
+   "fieldtype": "Int",
+   "label": "Extra Beds (Child)",
+   "default": "0",
+   "description": "Beds beyond the room's Max Allowed. Charged per night."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-03 02:00:00.000000",
+ "modified": "2026-09-11 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hotel Booking",

@@ -1,0 +1,148 @@
+/* Shared room-type presentation: capacity, amenities and tariff, rendered the same way
+   on the booking form, the enquiry, the reservation and anywhere else room details show. */
+
+.hc-room-card {
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 8px;
+	padding: 10px 12px;
+	background: var(--fg-color, #fff);
+	margin-top: 4px;
+}
+
+.hc-room-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-bottom: 6px;
+}
+
+.hc-room-name {
+	font-weight: 700;
+	font-size: 13px;
+	color: var(--text-color, #0f172a);
+}
+
+.hc-room-bed,
+.hc-room-cap {
+	font-size: 10px;
+	font-weight: 600;
+	border-radius: 20px;
+	padding: 2px 8px;
+	white-space: nowrap;
+}
+
+.hc-room-bed {
+	background: var(--bg-color, #f1f5f9);
+	color: var(--text-muted, #64748b);
+}
+
+.hc-room-cap {
+	background: #eef2ff;
+	color: #4338ca;
+}
+
+.hc-amenities {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	margin-bottom: 8px;
+}
+
+.hc-amenity {
+	font-size: 10px;
+	font-weight: 500;
+	color: #047857;
+	background: #ecfdf5;
+	border: 1px solid #a7f3d0;
+	border-radius: 20px;
+	padding: 2px 8px;
+	white-space: nowrap;
+}
+
+.hc-rates {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.hc-rate {
+	display: flex;
+	flex-direction: column;
+	background: var(--bg-color, #f8fafc);
+	border-radius: 6px;
+	padding: 4px 9px;
+	min-width: 78px;
+}
+
+.hc-rate span {
+	font-size: 9px;
+	text-transform: uppercase;
+	letter-spacing: 0.4px;
+	color: var(--text-muted, #64748b);
+}
+
+.hc-rate b {
+	font-size: 12px;
+	color: var(--text-color, #0f172a);
+}
+
+.hc-rate-wknd b {
+	color: #b45309;
+}
+
+.hc-room-desc {
+	font-size: 11px;
+	color: var(--text-muted, #64748b);
+	margin-top: 7px;
+	line-height: 1.45;
+}
+
+/* Stay quote breakdown — which nights were charged at the weekend tariff. */
+.hc-quote {
+	margin-top: 8px;
+	font-size: 11px;
+}
+
+.hc-quote table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.hc-quote td {
+	padding: 2px 4px;
+	border-bottom: 1px solid var(--border-color, #eef2f7);
+}
+
+.hc-quote td.num {
+	text-align: right;
+}
+
+.hc-quote tr.wknd td {
+	background: #fffbeb;
+	color: #b45309;
+	font-weight: 600;
+}
+
+.hc-quote tfoot td {
+	font-weight: 700;
+	border-top: 2px solid var(--border-color, #e2e8f0);
+	border-bottom: none;
+}
+
+.hc-warn {
+	color: #b91c1c;
+	font-weight: 600;
+	font-size: 11px;
+	margin-top: 6px;
+}
+
+/* Why some nights in a quote cost more. */
+.hc-quote-note {
+	font-size: 11px;
+	color: #b45309;
+	background: #fffbeb;
+	border-radius: 4px;
+	padding: 4px 8px;
+	margin-top: 6px;
+}

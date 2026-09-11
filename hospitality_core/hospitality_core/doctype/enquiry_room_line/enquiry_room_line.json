@@ -12,7 +12,9 @@
   "children",
   "rate_quoted",
   "nights",
-  "amount"
+  "amount",
+  "extra_beds_adult",
+  "extra_beds_child"
  ],
  "fields": [
   {
@@ -69,12 +71,24 @@
    "in_list_view": 1,
    "label": "Amount",
    "read_only": 1
+  },
+  {
+   "fieldname": "extra_beds_adult",
+   "fieldtype": "Int",
+   "label": "Extra Beds (Adult)",
+   "default": "0"
+  },
+  {
+   "fieldname": "extra_beds_child",
+   "fieldtype": "Int",
+   "label": "Extra Beds (Child)",
+   "default": "0"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-09-03 01:00:00.000000",
+ "modified": "2026-09-11 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Enquiry Room Line",

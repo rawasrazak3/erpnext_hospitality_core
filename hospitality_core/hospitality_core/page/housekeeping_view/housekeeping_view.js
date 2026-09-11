@@ -31,12 +31,25 @@ function render_housekeeping_board(wrapper) {
                     else if (room.status === 'Out of Order') card_color = 'border-secondary';
                     else if (room.status === 'Maintenance') card_color = 'border-warning';
 
+                    // What is in the room, so housekeeping can see the turnaround it
+                    // is looking at without opening the record.
+                    const amen = (room.amenities || [])
+                        .map(a => `<span class="hc-amenity" title="${frappe.utils.escape_html(a.label)}">${a.icon}</span>`)
+                        .join('');
+                    const meta = [
+                        room.bedroom_configuration || '',
+                        room.max_occupancy ? __('Max {0}', [room.max_occupancy]) : ''
+                    ].filter(Boolean).join(' &middot; ');
+
                     let html = `
                     <div class="col-xs-6 col-sm-4 col-md-3 col-lg-2" style="padding: 10px;">
                         <div class="card ${card_color}" style="border-width: 2px; height: 100%;">
                             <div class="card-body text-center">
-                                <h4 class="card-title">${room.room_number}</h4>
-                                <p class="card-text text-muted">${room.status}</p>
+                                <h4 class="card-title">${frappe.utils.escape_html(room.room_number)}</h4>
+                                <p class="card-text text-muted" style="margin-bottom:2px">${room.status}</p>
+                                <p class="text-muted" style="font-size:10px;margin-bottom:4px">${frappe.utils.escape_html(room.room_type || '')}</p>
+                                ${meta ? `<p class="text-muted" style="font-size:10px;margin-bottom:4px">${meta}</p>` : ''}
+                                ${amen ? `<div class="hc-amenities" style="justify-content:center">${amen}</div>` : ''}
                                 ${get_action_buttons(room)}
                             </div>
                         </div>

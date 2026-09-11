@@ -12,6 +12,51 @@ frappe.ui.form.on("Hotel Enquiry", {
 		frm.trigger("set_indicator");
 		frm.trigger("add_actions");
 		frm.trigger("show_availability");
+		frm.trigger("render_room_details");
+	},
+
+	check_in_date: (frm) => frm.trigger("render_room_details"),
+	check_out_date: (frm) => frm.trigger("render_room_details"),
+
+	/* Capacity, amenities and tariff for every category on the quote, so the agent can
+	 * answer the guest's questions from this one screen. */
+	render_room_details(frm) {
+		const field = frm.get_field("room_details_preview");
+		if (!field || !field.$wrapper) return;
+
+		const types = [
+			...new Set((frm.doc.room_lines || []).map((l) => l.room_type).filter(Boolean)),
+		];
+		if (!types.length) {
+			field.$wrapper.empty();
+			return;
+		}
+
+		frappe.hospitality.room_details.catalog().then((catalog) => {
+			const cards = types
+				.map((name) => catalog.find((t) => t.name === name))
+				.filter(Boolean)
+				.map((t) => frappe.hospitality.room_details.card(t))
+				.join("");
+
+			// Warn per line when the party does not fit what is being quoted.
+			const warns = (frm.doc.room_lines || [])
+				.map((l) => {
+					const t = catalog.find((x) => x.name === l.room_type);
+					if (!t || !t.max_occupancy) return "";
+					const cap = cint(t.max_occupancy) * Math.max(cint(l.qty) || 1, 1);
+					const guests = cint(l.adults) + cint(l.children);
+					return guests > cap
+						? `<div class="hc-warn">&#9888; ${__(
+								"Row {0}: {1} guests exceed the {2} that {3} allows.",
+								[l.idx, guests, cap, l.room_type]
+						  )}</div>`
+						: "";
+				})
+				.join("");
+
+			field.$wrapper.html(cards + warns);
+		});
 	},
 
 	set_indicator(frm) {
@@ -175,11 +220,37 @@ frappe.ui.form.on("Hotel Enquiry", {
 frappe.ui.form.on("Enquiry Room Line", {
 	room_type(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
-		if (!row.room_type || row.rate_quoted) return;
-		frappe.db.get_value("Hotel Room Type", row.room_type, "default_rate").then((r) => {
-			if (r && r.message) {
-				frappe.model.set_value(cdt, cdn, "rate_quoted", r.message.default_rate);
-			}
-		});
+		if (!row.room_type) return;
+
+		// Quote the real stay window so a weekend enquiry is not under-quoted.
+		frappe.hospitality.room_details
+			.quote(row.room_type, frm.doc.check_in_date, frm.doc.check_out_date, {
+				qty: row.qty || 1,
+				adults: row.adults || 0,
+				children: row.children || 0,
+			})
+			.then((q) => {
+				if (!row.rate_quoted) {
+					if (q) {
+						frappe.model.set_value(cdt, cdn, "rate_quoted", q.average_nightly);
+					} else {
+						frappe.db
+							.get_value("Hotel Room Type", row.room_type, "default_rate")
+							.then((r) => {
+								if (r && r.message) {
+									frappe.model.set_value(
+										cdt, cdn, "rate_quoted", r.message.default_rate
+									);
+								}
+							});
+					}
+				}
+				frm.trigger("render_room_details");
+			});
 	},
+
+	qty: (frm) => frm.trigger("render_room_details"),
+	adults: (frm) => frm.trigger("render_room_details"),
+	children: (frm) => frm.trigger("render_room_details"),
+	room_lines_remove: (frm) => frm.trigger("render_room_details"),
 });

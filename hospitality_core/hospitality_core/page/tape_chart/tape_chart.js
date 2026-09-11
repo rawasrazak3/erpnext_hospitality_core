@@ -61,7 +61,22 @@ function draw_grid(data, start, end) {
 
     // Room Rows
     rooms.forEach(room => {
-        html += `<tr><td><b>${room.room_number}</b><br><small>${room.room_type}</small></td>`;
+        // Capacity and amenities in the row header, so the chart answers "which unit
+        // sleeps six and has a pool" at a glance.
+        const amen = (room.amenities || []).map(a => a.icon).join(' ');
+        const meta = [
+            room.bedroom_configuration || '',
+            room.max_occupancy ? __('Max {0}', [room.max_occupancy]) : ''
+        ].filter(Boolean).join(' · ');
+        const blocked = ['Maintenance', 'Out of Order'].includes(room.status);
+
+        html += `<tr><td${blocked ? ' style="background:#f8fafc"' : ''}>
+            <b>${frappe.utils.escape_html(room.room_number)}</b>
+            ${blocked ? `<br><small style="color:#b45309">${room.status}</small>` : ''}
+            <br><small>${frappe.utils.escape_html(room.room_type || '')}</small>
+            ${meta ? `<br><small style="color:#94a3b8">${meta}</small>` : ''}
+            ${amen ? `<br><small title="${__('Amenities')}">${amen}</small>` : ''}
+        </td>`;
         
         dates.forEach(date => {
             // Find booking for this room on this date

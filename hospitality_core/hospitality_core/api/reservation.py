@@ -241,10 +241,15 @@ def create_folio(reservation_doc):
 
 @frappe.whitelist()
 def get_room_rate(room=None, rate_plan=None, room_type=None, arrival_date=None,
-                  discount_type=None, discount_value=None, is_complimentary=None):
+                  discount_type=None, discount_value=None, is_complimentary=None,
+                  extra_beds_adult=0, extra_beds_child=0):
     """
     Returns the base rate and discounted rate for the reservation form preview.
     Called by hotel_reservation.js when room, rate_plan, or discount fields change.
+
+    `base_rate` is the tariff for the arrival night — weekday or weekend, whichever the
+    date falls on — plus any extra beds, so the preview matches what the night audit
+    will post for that night.
     """
     from hospitality_core.hospitality_core.api.night_audit import get_rate
     from frappe.utils import flt, nowdate
@@ -259,6 +264,18 @@ def get_room_rate(room=None, rate_plan=None, room_type=None, arrival_date=None,
     date = arrival_date or nowdate()
     base_rate = flt(get_rate(rate_plan, room_type, date))
 
+    # Extra beds are a per-night charge on top of the room, so they belong in the
+    # figure the desk is quoting from.
+    beds = frappe.db.get_value(
+        "Hotel Room Type", room_type,
+        ["extra_bed_adult_rate", "extra_bed_child_rate"], as_dict=True,
+    ) or {}
+    extra_bed_amount = (
+        frappe.utils.cint(extra_beds_adult) * flt(beds.get("extra_bed_adult_rate"))
+        + frappe.utils.cint(extra_beds_child) * flt(beds.get("extra_bed_child_rate"))
+    )
+    base_rate += extra_bed_amount
+
     # Calculate discount
     discount_amount = 0.0
     if frappe.utils.cint(is_complimentary):
@@ -272,6 +289,7 @@ def get_room_rate(room=None, rate_plan=None, room_type=None, arrival_date=None,
 
     return {
         "base_rate": base_rate,
+        "extra_bed_amount": extra_bed_amount,
         "discount_amount": discount_amount,
         "final_rate": final_rate
     }

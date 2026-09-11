@@ -18,7 +18,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, get_datetime, getdate, now_datetime, nowdate
 
-from hospitality_core.hospitality_core.api import availability
+from hospitality_core.hospitality_core.api import availability, tariff
 
 # Statuses from which a booking may still be confirmed.
 CONFIRMABLE = ("Draft", "Tentative")
@@ -30,6 +30,7 @@ class HotelBooking(Document):
 	def validate(self):
 		self.validate_dates()
 		self.calculate_totals()
+		self.validate_capacity()
 		self.validate_rooms()
 
 	def before_insert(self):
@@ -55,10 +56,24 @@ class HotelBooking(Document):
 		self.nights = (getdate(self.departure_date) - getdate(self.arrival_date)).days
 
 	def calculate_totals(self):
+		"""Price every line for the actual stay window, not rate x nights.
+
+		The property charges more Friday through Sunday, so a flat multiplication
+		understates any stay touching a weekend. `quote_stay` walks the nights and the
+		line's `rate` is set to the resulting average, which keeps the stored
+		`rate x qty x nights` arithmetic true for anything reading the row later.
+		"""
 		total = 0.0
 		for line in self.rooms:
 			line.nights = cint(self.nights)
-			line.amount = flt(line.rate) * max(cint(line.qty), 1) * max(cint(line.nights), 1)
+
+			quote = self._quote_line(line)
+			if quote:
+				line.rate = quote["average_nightly"]
+				line.amount = quote["total"]
+			else:
+				line.amount = flt(line.rate) * max(cint(line.qty), 1) * max(cint(line.nights), 1)
+
 			total += flt(line.amount)
 
 		self.total_amount = total
@@ -67,6 +82,54 @@ class HotelBooking(Document):
 			for p in self.payments
 		)
 		self.balance_due = flt(self.total_amount) - flt(self.advance_received)
+
+	def _quote_line(self, line):
+		"""Server-priced quote for one room line, or None if it cannot be priced yet."""
+		if not (line.room_type and self.arrival_date and self.departure_date):
+			return None
+		if getdate(self.departure_date) <= getdate(self.arrival_date):
+			return None
+		try:
+			return tariff.quote_stay(
+				line.room_type, self.arrival_date, self.departure_date,
+				qty=line.qty, adults=line.adults, children=line.children,
+				extra_beds_adult=line.get("extra_beds_adult"),
+				extra_beds_child=line.get("extra_beds_child"),
+			)
+		except Exception:
+			# A category with a broken tariff should not block saving the booking;
+			# the line falls back to whatever rate the agent typed.
+			frappe.log_error(
+				f"Could not price {line.room_type} on {self.name}", "Hotel Booking pricing"
+			)
+			return None
+
+	def validate_capacity(self):
+		"""Refuse to sell a room to more people than it holds.
+
+		Caught here rather than at check-in, which is where the guest finds out.
+		"""
+		for line in self.rooms:
+			if not line.room_type:
+				continue
+			max_occupancy = cint(
+				frappe.db.get_value("Hotel Room Type", line.room_type, "max_occupancy")
+			)
+			if not max_occupancy:
+				continue
+
+			capacity = max_occupancy * max(cint(line.qty), 1)
+			beds = cint(line.get("extra_beds_adult")) + cint(line.get("extra_beds_child"))
+			guests = cint(line.adults) + cint(line.children)
+
+			if guests > capacity + beds:
+				frappe.throw(
+					_("Row {0}: {1} guests exceed the {2} that {3} x {4} allows. "
+					  "Add another room, or {5} extra bed(s).").format(
+						line.idx, guests, capacity, max(cint(line.qty), 1),
+						line.room_type, guests - capacity - beds,
+					)
+				)
 
 	def validate_rooms(self):
 		"""A line with a room assigned must actually be free, and no room twice."""

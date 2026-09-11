@@ -1,5 +1,6 @@
 import frappe
 
+from hospitality_core.hospitality_core.api import tariff
 from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import BLOCKED_STATUSES
 
 @frappe.whitelist()
@@ -10,6 +11,9 @@ def check_availability_counts(start_date, end_date):
         filters={"is_enabled": 1},
         order_by="room_number"
     )
+
+    # Capacity and amenities per category, so the tool answers "what fits where".
+    catalog = {t["name"]: t for t in tariff.get_room_type_catalog(only_active=False)}
 
     # 2. Get all Overlapping Reservations using full datetime comparison
     # Default check-in time: 14:00, default check-out time: 12:00
@@ -41,11 +45,17 @@ def check_availability_counts(start_date, end_date):
                 status = "Reserved"
             details = f"{res.name} ({res.guest})"
         
+        info = catalog.get(room.room_type) or {}
         room_details.append({
             "room": room.name,
             "room_type": room.room_type,
             "status": status,
-            "details": details
+            "details": details,
+            "max_occupancy": info.get("max_occupancy"),
+            "bedroom_configuration": info.get("bedroom_configuration"),
+            "amenities": info.get("amenities", []),
+            "default_rate": info.get("default_rate"),
+            "weekend_rate": info.get("weekend_rate"),
         })
 
         # Summary Logic
@@ -53,6 +63,8 @@ def check_availability_counts(start_date, end_date):
             summary_map[room.room_type] = {"room_type": room.room_type, "total": 0, "occupied": 0, "available": 0}
         
         summary_map[room.room_type]["total"] += 1
+        summary_map[room.room_type].setdefault("max_occupancy", info.get("max_occupancy"))
+        summary_map[room.room_type].setdefault("amenities", info.get("amenities", []))
         if status in ("Occupied", "Reserved") or status in BLOCKED_STATUSES:
             summary_map[room.room_type]["occupied"] += 1
         else:

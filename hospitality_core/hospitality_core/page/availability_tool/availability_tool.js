@@ -56,7 +56,7 @@ function render_results(wrapper, data) {
 
     let details_html = `<h4 style="margin-top:30px;">Detailed Room Status</h4>
         <table class="table table-bordered">
-        <thead><tr style="background-color:#f0f4f7;"><th>Room</th><th>Type</th><th>Status</th><th>Reason/Reservation</th></tr></thead>
+        <thead><tr style="background-color:#f0f4f7;"><th>Room</th><th>Type</th><th>Sleeps</th><th>Amenities</th><th>Status</th><th>Reason/Reservation</th></tr></thead>
         <tbody>`;
 
     data.room_details.forEach(row => {
@@ -68,10 +68,13 @@ function render_results(wrapper, data) {
 
         details_html += `
             <tr>
-                <td>${row.room}</td>
-                <td>${row.room_type}</td>
+                <td>${frappe.utils.escape_html(row.room)}</td>
+                <td>${frappe.utils.escape_html(row.room_type || '')}
+                    ${row.bedroom_configuration ? `<br><small style="color:#94a3b8">${frappe.utils.escape_html(row.bedroom_configuration)}</small>` : ''}</td>
+                <td>${row.max_occupancy ? `\uD83D\uDC64 ${row.max_occupancy}` : '-'}</td>
+                <td><small title="${__('Amenities')}">${(row.amenities || []).map(a => a.icon).join(' ') || '-'}</small></td>
                 <td><span class="label" style="background-color:${status_color}; color:white; padding: 2px 8px; border-radius: 4px;">${row.status}</span></td>
-                <td><small>${row.details || '-'}</small></td>
+                <td><small>${frappe.utils.escape_html(row.details || '-')}</small></td>
             </tr>
         `;
     });

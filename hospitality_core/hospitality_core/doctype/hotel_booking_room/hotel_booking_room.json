@@ -14,7 +14,9 @@
   "nights",
   "amount",
   "room",
-  "reservation"
+  "reservation",
+  "extra_beds_adult",
+  "extra_beds_child"
  ],
  "fields": [
   {
@@ -87,12 +89,24 @@
    "no_copy": 1,
    "options": "Hotel Reservation",
    "read_only": 1
+  },
+  {
+   "fieldname": "extra_beds_adult",
+   "fieldtype": "Int",
+   "label": "Extra Beds (Adult)",
+   "default": "0"
+  },
+  {
+   "fieldname": "extra_beds_child",
+   "fieldtype": "Int",
+   "label": "Extra Beds (Child)",
+   "default": "0"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-09-03 02:00:00.000000",
+ "modified": "2026-09-11 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hotel Booking Room",

@@ -1,260 +1,281 @@
 {
-    "actions": [],
-    "allow_rename": 1,
-    "creation": "2026-01-17 16:15:00.000000",
-    "doctype": "DocType",
-    "engine": "InnoDB",
-    "field_order": [
-        "company",
-        "hotel_name",
-        "column_break_company",
-        "cost_center",
-        "section_break_accounts",
-        "receivable_account",
-        "income_suspense_account",
-        "income_account",
-        "advance_liability_account",
-        "section_break_gst",
-        "default_gst_rate",
-        "enable_igst",
-        "column_break_gst",
-        "cgst_account",
-        "sgst_account",
-        "igst_account",
-        "section_break_legacy_tax",
-        "consumption_tax_account",
-        "vat_account",
-        "service_charge_account",
-        "section_break_printing",
-        "enable_auto_print",
-        "receipt_print_format",
-        "print_copies",
-        "section_break_policy",
-        "billing_policy",
-        "column_break_policy",
-        "standard_check_in_time",
-        "standard_check_out_time"
-    ],
-    "fields": [
-        {
-            "fieldname": "company",
-            "fieldtype": "Link",
-            "label": "Company",
-            "options": "Company",
-            "reqd": 1,
-            "description": "The ERPNext Company under which this hotel operates. All accounting entries will be posted against this company."
-        },
-        {
-            "fieldname": "hotel_name",
-            "fieldtype": "Data",
-            "label": "Hotel Display Name",
-            "description": "Friendly name shown in messages and receipts. If blank, the Company name is used."
-        },
-        {
-            "fieldname": "column_break_company",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "cost_center",
-            "fieldtype": "Link",
-            "in_list_view": 1,
-            "label": "Cost Center",
-            "options": "Cost Center",
-            "reqd": 1
-        },
-        {
-            "fieldname": "section_break_accounts",
-            "fieldtype": "Section Break",
-            "label": "Accounts"
-        },
-        {
-            "fieldname": "receivable_account",
-            "fieldtype": "Link",
-            "in_list_view": 1,
-            "label": "Receivable Account",
-            "options": "Account",
-            "reqd": 1
-        },
-        {
-            "fieldname": "income_suspense_account",
-            "fieldtype": "Link",
-            "in_list_view": 1,
-            "label": "Income Suspense Account",
-            "options": "Account",
-            "reqd": 1,
-            "description": "Account where revenue is held until payment is made (e.g., Unearned Revenue)."
-        },
-        {
-            "fieldname": "income_account",
-            "fieldtype": "Link",
-            "in_list_view": 1,
-            "label": "Income Account",
-            "options": "Account",
-            "reqd": 1
-        },
-        {
-            "fieldname": "advance_liability_account",
-            "fieldtype": "Link",
-            "label": "Advance Liability Account",
-            "options": "Account",
-            "description": "Liability account holding advances received for future stays. Money sits here until the guest checks in and the advance is applied to the room folio, so an advance never recognises revenue in the period it was collected."
-        },
-        {
-            "fieldname": "section_break_gst",
-            "fieldtype": "Section Break",
-            "label": "GST Configuration"
-        },
-        {
-            "fieldname": "default_gst_rate",
-            "fieldtype": "Percent",
-            "label": "Default GST Rate (%)",
-            "default": "12",
-            "description": "Total GST rate applied to hotel services. Typically 12% for rooms below ₹7,500/night or 18% for rooms ₹7,500 and above."
-        },
-        {
-            "fieldname": "enable_igst",
-            "fieldtype": "Check",
-            "label": "Enable IGST (Inter-State)",
-            "default": 0,
-            "description": "If checked, IGST will be used instead of CGST+SGST for inter-state transactions."
-        },
-        {
-            "fieldname": "column_break_gst",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "cgst_account",
-            "fieldtype": "Link",
-            "label": "CGST Account",
-            "options": "Account",
-            "description": "Central GST output account (half of total GST rate)."
-        },
-        {
-            "fieldname": "sgst_account",
-            "fieldtype": "Link",
-            "label": "SGST Account",
-            "options": "Account",
-            "description": "State GST output account (half of total GST rate)."
-        },
-        {
-            "fieldname": "igst_account",
-            "fieldtype": "Link",
-            "label": "IGST Account",
-            "options": "Account",
-            "depends_on": "enable_igst",
-            "description": "Integrated GST output account (full GST rate for inter-state)."
-        },
-        {
-            "fieldname": "section_break_legacy_tax",
-            "fieldtype": "Section Break",
-            "label": "Legacy Tax Accounts (Deprecated)",
-            "collapsible": 1,
-            "description": "These fields are from the original Nigerian tax configuration. They are kept for backward compatibility with existing GL entries but are NOT used for new transactions."
-        },
-        {
-            "fieldname": "consumption_tax_account",
-            "fieldtype": "Link",
-            "label": "Consumption Tax Account (Legacy)",
-            "options": "Account",
-            "reqd": 0
-        },
-        {
-            "fieldname": "vat_account",
-            "fieldtype": "Link",
-            "label": "VAT Account (Legacy)",
-            "options": "Account",
-            "reqd": 0
-        },
-        {
-            "fieldname": "service_charge_account",
-            "fieldtype": "Link",
-            "label": "Service Charge Account (Legacy)",
-            "options": "Account",
-            "reqd": 0
-        },
-        {
-            "fieldname": "section_break_printing",
-            "fieldtype": "Section Break",
-            "label": "Automatic Printing"
-        },
-        {
-            "fieldname": "enable_auto_print",
-            "fieldtype": "Check",
-            "label": "Enable Automatic Receipt Printing",
-            "default": 0,
-            "description": "Automatically print receipts to the system's default printer when a POS Invoice is submitted"
-        },
-        {
-            "fieldname": "receipt_print_format",
-            "fieldtype": "Link",
-            "label": "Receipt Print Format",
-            "options": "Print Format",
-            "description": "Custom print format for receipts (leave blank to use default POS Invoice format)",
-            "depends_on": "enable_auto_print"
-        },
-        {
-            "fieldname": "print_copies",
-            "fieldtype": "Int",
-            "label": "Number of Copies to Print",
-            "default": 3,
-            "description": "Number of receipt copies to print automatically",
-            "depends_on": "enable_auto_print"
-        },
-        {
-            "fieldname": "section_break_policy",
-            "fieldtype": "Section Break",
-            "label": "Billing Policy"
-        },
-        {
-            "fieldname": "billing_policy",
-            "fieldtype": "Select",
-            "label": "Billing Policy",
-            "options": "Fixed Time\n24-Hour",
-            "default": "Fixed Time",
-            "description": "Fixed Time enforces a standard checkout time regardless of check-in. 24-Hour sets checkout to exactly 24 hours after check-in."
-        },
-        {
-            "fieldname": "column_break_policy",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "standard_check_in_time",
-            "fieldtype": "Time",
-            "label": "Standard Check-In Time",
-            "default": "14:00:00",
-            "depends_on": "eval:doc.billing_policy=='Fixed Time'"
-        },
-        {
-            "fieldname": "standard_check_out_time",
-            "fieldtype": "Time",
-            "label": "Standard Check-Out Time",
-            "default": "12:00:00",
-            "depends_on": "eval:doc.billing_policy=='Fixed Time'"
-        }
-    ],
-    "index_web_pages_for_search": 1,
-    "issingle": 1,
-    "links": [],
-    "modified": "2026-07-13 10:30:00.000000",
-    "modified_by": "Administrator",
-    "module": "Hospitality Core",
-    "name": "Hospitality Accounting Settings",
-    "owner": "Administrator",
-    "permissions": [
-        {
-            "create": 1,
-            "delete": 1,
-            "email": 1,
-            "export": 1,
-            "print": 1,
-            "read": 1,
-            "report": 1,
-            "role": "System Manager",
-            "share": 1,
-            "write": 1
-        }
-    ],
-    "sort_field": "modified",
-    "sort_order": "DESC",
-    "states": []
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-01-17 16:15:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "hotel_name",
+  "column_break_company",
+  "cost_center",
+  "section_break_accounts",
+  "receivable_account",
+  "income_suspense_account",
+  "income_account",
+  "advance_liability_account",
+  "section_break_gst",
+  "default_gst_rate",
+  "enable_igst",
+  "column_break_gst",
+  "cgst_account",
+  "sgst_account",
+  "igst_account",
+  "section_break_legacy_tax",
+  "consumption_tax_account",
+  "vat_account",
+  "service_charge_account",
+  "section_break_printing",
+  "enable_auto_print",
+  "receipt_print_format",
+  "print_copies",
+  "section_break_policy",
+  "billing_policy",
+  "column_break_policy",
+  "standard_check_in_time",
+  "standard_check_out_time",
+  "section_break_tariff",
+  "holiday_list",
+  "tariff_calendar_help"
+ ],
+ "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1,
+   "description": "The ERPNext Company under which this hotel operates. All accounting entries will be posted against this company."
+  },
+  {
+   "fieldname": "hotel_name",
+   "fieldtype": "Data",
+   "label": "Hotel Display Name",
+   "description": "Friendly name shown in messages and receipts. If blank, the Company name is used."
+  },
+  {
+   "fieldname": "column_break_company",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Cost Center",
+   "options": "Cost Center",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_accounts",
+   "fieldtype": "Section Break",
+   "label": "Accounts"
+  },
+  {
+   "fieldname": "receivable_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Receivable Account",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "income_suspense_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Income Suspense Account",
+   "options": "Account",
+   "reqd": 1,
+   "description": "Account where revenue is held until payment is made (e.g., Unearned Revenue)."
+  },
+  {
+   "fieldname": "income_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Income Account",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "advance_liability_account",
+   "fieldtype": "Link",
+   "label": "Advance Liability Account",
+   "options": "Account",
+   "description": "Liability account holding advances received for future stays. Money sits here until the guest checks in and the advance is applied to the room folio, so an advance never recognises revenue in the period it was collected."
+  },
+  {
+   "fieldname": "section_break_gst",
+   "fieldtype": "Section Break",
+   "label": "GST Configuration"
+  },
+  {
+   "fieldname": "default_gst_rate",
+   "fieldtype": "Percent",
+   "label": "Default GST Rate (%)",
+   "default": "12",
+   "description": "Total GST rate applied to hotel services. Typically 12% for rooms below \u20b97,500/night or 18% for rooms \u20b97,500 and above."
+  },
+  {
+   "fieldname": "enable_igst",
+   "fieldtype": "Check",
+   "label": "Enable IGST (Inter-State)",
+   "default": 0,
+   "description": "If checked, IGST will be used instead of CGST+SGST for inter-state transactions."
+  },
+  {
+   "fieldname": "column_break_gst",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cgst_account",
+   "fieldtype": "Link",
+   "label": "CGST Account",
+   "options": "Account",
+   "description": "Central GST output account (half of total GST rate)."
+  },
+  {
+   "fieldname": "sgst_account",
+   "fieldtype": "Link",
+   "label": "SGST Account",
+   "options": "Account",
+   "description": "State GST output account (half of total GST rate)."
+  },
+  {
+   "fieldname": "igst_account",
+   "fieldtype": "Link",
+   "label": "IGST Account",
+   "options": "Account",
+   "depends_on": "enable_igst",
+   "description": "Integrated GST output account (full GST rate for inter-state)."
+  },
+  {
+   "fieldname": "section_break_legacy_tax",
+   "fieldtype": "Section Break",
+   "label": "Legacy Tax Accounts (Deprecated)",
+   "collapsible": 1,
+   "description": "These fields are from the original Nigerian tax configuration. They are kept for backward compatibility with existing GL entries but are NOT used for new transactions."
+  },
+  {
+   "fieldname": "consumption_tax_account",
+   "fieldtype": "Link",
+   "label": "Consumption Tax Account (Legacy)",
+   "options": "Account",
+   "reqd": 0
+  },
+  {
+   "fieldname": "vat_account",
+   "fieldtype": "Link",
+   "label": "VAT Account (Legacy)",
+   "options": "Account",
+   "reqd": 0
+  },
+  {
+   "fieldname": "service_charge_account",
+   "fieldtype": "Link",
+   "label": "Service Charge Account (Legacy)",
+   "options": "Account",
+   "reqd": 0
+  },
+  {
+   "fieldname": "section_break_printing",
+   "fieldtype": "Section Break",
+   "label": "Automatic Printing"
+  },
+  {
+   "fieldname": "enable_auto_print",
+   "fieldtype": "Check",
+   "label": "Enable Automatic Receipt Printing",
+   "default": 0,
+   "description": "Automatically print receipts to the system's default printer when a POS Invoice is submitted"
+  },
+  {
+   "fieldname": "receipt_print_format",
+   "fieldtype": "Link",
+   "label": "Receipt Print Format",
+   "options": "Print Format",
+   "description": "Custom print format for receipts (leave blank to use default POS Invoice format)",
+   "depends_on": "enable_auto_print"
+  },
+  {
+   "fieldname": "print_copies",
+   "fieldtype": "Int",
+   "label": "Number of Copies to Print",
+   "default": 3,
+   "description": "Number of receipt copies to print automatically",
+   "depends_on": "enable_auto_print"
+  },
+  {
+   "fieldname": "section_break_policy",
+   "fieldtype": "Section Break",
+   "label": "Billing Policy"
+  },
+  {
+   "fieldname": "billing_policy",
+   "fieldtype": "Select",
+   "label": "Billing Policy",
+   "options": "Fixed Time\n24-Hour",
+   "default": "Fixed Time",
+   "description": "Fixed Time enforces a standard checkout time regardless of check-in. 24-Hour sets checkout to exactly 24 hours after check-in."
+  },
+  {
+   "fieldname": "column_break_policy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "standard_check_in_time",
+   "fieldtype": "Time",
+   "label": "Standard Check-In Time",
+   "default": "14:00:00",
+   "depends_on": "eval:doc.billing_policy=='Fixed Time'"
+  },
+  {
+   "fieldname": "standard_check_out_time",
+   "fieldtype": "Time",
+   "label": "Standard Check-Out Time",
+   "default": "12:00:00",
+   "depends_on": "eval:doc.billing_policy=='Fixed Time'"
+  },
+  {
+   "fieldname": "section_break_tariff",
+   "fieldtype": "Section Break",
+   "label": "Tariff Calendar"
+  },
+  {
+   "fieldname": "holiday_list",
+   "fieldtype": "Link",
+   "label": "Holiday List",
+   "options": "Holiday List",
+   "description": "Dates in this list are charged at the Weekend Rate, on top of every Saturday and Sunday. Leave blank to use the company's default Holiday List."
+  },
+  {
+   "fieldname": "tariff_calendar_help",
+   "fieldtype": "HTML",
+   "label": "Tariff Calendar Help",
+   "options": "<p class='text-muted small'>A night is charged at the Weekend Rate when it falls on a Saturday, a Sunday, or any date in the Holiday List above. Every other night is charged at the Default Rate.</p>"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-11 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hospitality Core",
+ "name": "Hospitality Accounting Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
 }

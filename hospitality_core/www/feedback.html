@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="{{ lang or 'en' }}">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="robots" content="noindex, nofollow">
+	<title>{{ _("Share Your Feedback") }} · {{ hotel_name }}</title>
+	<style>
+		:root {
+			--bg: #f4f5f7;
+			--card: #ffffff;
+			--ink: #1b1f23;
+			--muted: #6a7178;
+			--line: #e3e6ea;
+			--accent: #1a6b54;
+			--accent-ink: #ffffff;
+			--star-off: #d6dade;
+			--star-on: #f0a500;
+			--warn-bg: #fff6e5;
+			--warn-line: #f0c268;
+		}
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #16191c;
+				--card: #1f2327;
+				--ink: #eceff1;
+				--muted: #9aa2a9;
+				--line: #32383d;
+				--accent: #2f9c7a;
+				--star-off: #444b51;
+				--warn-bg: #2e2718;
+				--warn-line: #6d5722;
+			}
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--ink);
+			font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			-webkit-text-size-adjust: 100%;
+		}
+		.wrap { max-width: 620px; margin: 0 auto; padding: 20px 16px 56px; }
+		.masthead { text-align: center; padding: 12px 0 20px; }
+		.masthead .hotel { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+		.masthead h1 { font-size: 24px; margin: 8px 0 6px; font-weight: 650; }
+		.masthead p { margin: 0; color: var(--muted); font-size: 15px; }
+		.card {
+			background: var(--card);
+			border: 1px solid var(--line);
+			border-radius: 14px;
+			padding: 18px 16px;
+			margin-bottom: 14px;
+		}
+		.card > h2 {
+			font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
+			color: var(--muted); margin: 0 0 14px; font-weight: 600;
+		}
+		fieldset { border: 0; margin: 0; padding: 0; }
+		legend { padding: 0; }
+
+		/* --- star rating --- */
+		.rate-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+		.rate-row:last-child { border-bottom: 0; padding-bottom: 0; }
+		.rate-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+		.rate-label { font-weight: 550; font-size: 15px; }
+		.stars { display: inline-flex; flex-direction: row-reverse; gap: 2px; }
+		.stars input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+		.stars label {
+			cursor: pointer; font-size: 27px; line-height: 1; color: var(--star-off);
+			padding: 2px 1px; transition: color .12s ease; user-select: none;
+		}
+		.stars input:checked ~ label,
+		.stars label:hover, .stars label:hover ~ label { color: var(--star-on); }
+		.stars input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+		.overall { text-align: center; padding: 4px 0 2px; }
+		.overall .rate-label { display: block; font-size: 17px; margin-bottom: 8px; }
+		.overall .stars label { font-size: 40px; }
+		.overall .score-word { min-height: 22px; color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+		/* --- issue toggle --- */
+		.issue-toggle {
+			background: none; border: 0; padding: 4px 0; margin-top: 4px;
+			color: var(--muted); font-size: 13px; cursor: pointer; text-align: left;
+			font-family: inherit; text-decoration: underline; text-underline-offset: 3px;
+		}
+		.issue-toggle[aria-expanded="true"] { color: var(--ink); }
+		.issue-box { margin-top: 8px; background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px; padding: 10px; }
+		.issue-box textarea { margin: 0; }
+
+		textarea, input[type="text"], input[type="tel"], input[type="email"] {
+			width: 100%; font: inherit; color: var(--ink); background: var(--card);
+			border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 6px;
+		}
+		textarea { min-height: 84px; resize: vertical; }
+		textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+		label.field { display: block; font-size: 14px; font-weight: 550; margin-bottom: 12px; }
+		label.field:last-child { margin-bottom: 0; }
+		label.field span.hint { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+
+		/* --- choice chips --- */
+		.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+		.chips input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+		.chips label {
+			border: 1px solid var(--line); border-radius: 999px; padding: 8px 18px;
+			cursor: pointer; font-size: 15px; background: var(--card);
+		}
+		.chips input:checked + label { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+		.chips input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+		.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+		@media (max-width: 480px) { .grid2 { grid-template-columns: 1fr; } }
+
+		button.submit {
+			width: 100%; border: 0; border-radius: 12px; padding: 15px;
+			background: var(--accent); color: var(--accent-ink);
+			font: 600 17px/1 inherit; font-family: inherit; cursor: pointer;
+		}
+		button.submit[disabled] { opacity: .6; cursor: progress; }
+		.foot { text-align: center; color: var(--muted); font-size: 13px; margin-top: 14px; }
+		.error {
+			background: #fdecec; border: 1px solid #e9a8a8; color: #8c2020;
+			border-radius: 10px; padding: 12px; margin-bottom: 14px; font-size: 15px;
+		}
+		@media (prefers-color-scheme: dark) {
+			.error { background: #3a1f1f; border-color: #6d3232; color: #f2b8b8; }
+		}
+		.done { text-align: center; padding: 36px 20px; }
+		.done .tick { font-size: 46px; line-height: 1; }
+		.done h2 { font-size: 21px; margin: 14px 0 8px; text-transform: none; letter-spacing: 0; color: var(--ink); }
+		.done p { color: var(--muted); margin: 0; }
+		[hidden] { display: none !important; }
+	</style>
+</head>
+<body>
+<div class="wrap">
+
+	<div class="masthead">
+		<div class="hotel">{{ hotel_name }}</div>
+		{% if stay.first_name %}
+			<h1>{{ _("Thank you for staying with us, {0}").format(stay.first_name) }}</h1>
+		{% else %}
+			<h1>{{ _("How was your stay?") }}</h1>
+		{% endif %}
+		<p>
+			{% if stay.room %}
+				{{ _("Room {0}").format(stay.room) }} ·
+			{% endif %}
+			{{ _("Takes about a minute. No login needed.") }}
+		</p>
+	</div>
+
+	{% if stay.already_submitted %}
+		<div class="card done">
+			<div class="tick">✓</div>
+			<h2>{{ _("We already have your feedback") }}</h2>
+			<p>{{ _("Thank you for taking the time. Our management team has it.") }}</p>
+		</div>
+	{% else %}
+
+	<form id="feedback-form" novalidate>
+		<div class="error" id="form-error" hidden role="alert"></div>
+
+		<div class="card">
+			<div class="rate-row overall">
+				<fieldset>
+					<legend class="rate-label">{{ _("Your overall stay") }}</legend>
+					<div class="stars" data-score-word="overall">
+						{% for n in [5, 4, 3, 2, 1] %}
+							<input type="radio" name="overall_rating" id="overall-{{ n }}" value="{{ n }}">
+							<label for="overall-{{ n }}" title="{{ n }}" aria-label="{{ _('{0} out of 5').format(n) }}">★</label>
+						{% endfor %}
+					</div>
+					<div class="score-word" id="overall-word" aria-live="polite"></div>
+				</fieldset>
+			</div>
+		</div>
+
+		<div class="card">
+			<h2>{{ _("Rate each area") }}</h2>
+			{% for f in rating_fields %}
+			<div class="rate-row">
+				<fieldset>
+					<div class="rate-head">
+						<legend class="rate-label">{{ f.label }}</legend>
+						<div class="stars">
+							{% for n in [5, 4, 3, 2, 1] %}
+								<input type="radio" name="{{ f.fieldname }}" id="{{ f.fieldname }}-{{ n }}" value="{{ n }}">
+								<label for="{{ f.fieldname }}-{{ n }}" title="{{ n }}"
+									aria-label="{{ f.label }}: {{ _('{0} out of 5').format(n) }}">★</label>
+							{% endfor %}
+						</div>
+					</div>
+					<button type="button" class="issue-toggle" aria-expanded="false"
+						data-target="issue-{{ loop.index }}">
+						＋ {{ _("Report a problem with this") }}
+					</button>
+					<div class="issue-box" id="issue-{{ loop.index }}" hidden>
+						<textarea data-issue-area="{{ f.area }}"
+							placeholder="{{ _('What went wrong? The more detail, the faster we fix it.') }}"></textarea>
+					</div>
+				</fieldset>
+			</div>
+			{% endfor %}
+		</div>
+
+		<div class="card">
+			<h2>{{ _("Anything else to report") }}</h2>
+			{% for area in extra_issue_areas %}
+				<label class="field">{{ area.label }}
+					<textarea data-issue-area="{{ area.area }}"
+						placeholder="{{ _('Optional') }}"></textarea>
+				</label>
+			{% endfor %}
+		</div>
+
+		<div class="card">
+			<h2>{{ _("In your words") }}</h2>
+			<label class="field">{{ _("What went well?") }}
+				<textarea name="what_went_well" maxlength="2000"></textarea>
+			</label>
+			<label class="field">{{ _("What could we do better?") }}
+				<textarea name="improvements" maxlength="2000"></textarea>
+			</label>
+			<fieldset>
+				<legend class="rate-label" style="margin-bottom:8px">{{ _("Would you recommend us?") }}</legend>
+				<div class="chips">
+					{% for choice in [("Yes", _("Yes")), ("Maybe", _("Maybe")), ("No", _("No"))] %}
+						<input type="radio" name="would_recommend" id="rec-{{ choice[0] }}" value="{{ choice[0] }}">
+						<label for="rec-{{ choice[0] }}">{{ choice[1] }}</label>
+					{% endfor %}
+				</div>
+			</fieldset>
+		</div>
+
+		{% if not stay.reservation %}
+		<div class="card">
+			<h2>{{ _("About you") }}</h2>
+			<div class="grid2">
+				<label class="field">{{ _("Your name") }}
+					<input type="text" name="guest_name" maxlength="140" autocomplete="name">
+				</label>
+				<label class="field">{{ _("Room number") }}
+					<input type="text" name="room" maxlength="140">
+				</label>
+				<label class="field">{{ _("Mobile") }} <span class="hint">{{ _("Only if you want a reply") }}</span>
+					<input type="tel" name="mobile_no" maxlength="20" autocomplete="tel">
+				</label>
+				<label class="field">{{ _("Email") }} <span class="hint">{{ _("Optional") }}</span>
+					<input type="email" name="email_id" maxlength="140" autocomplete="email">
+				</label>
+			</div>
+		</div>
+		{% endif %}
+
+		<button type="submit" class="submit" id="submit-btn">{{ _("Send Feedback") }}</button>
+		<p class="foot">{{ _("Your feedback goes straight to the management team at {0}.").format(hotel_name) }}</p>
+	</form>
+
+	<div class="card done" id="thank-you" hidden>
+		<div class="tick">✓</div>
+		<h2>{{ _("Thank you") }}</h2>
+		<p id="thank-you-text">{{ _("Your feedback has reached our management team.") }}</p>
+	</div>
+
+	{% endif %}
+</div>
+
+<script>window.frappe = window.frappe || {};</script>
+<!-- csrf_token -->
+<script>
+(function () {
+	var form = document.getElementById('feedback-form');
+	if (!form) { return; }
+
+	// Frappe stamps the token into the comment tag above. A guest session that has no
+	// token yet is stamped as the string "None", and CSRF is not enforced for it either.
+	var CSRF_TOKEN = window.frappe.csrf_token;
+	var HAS_CSRF = Boolean(CSRF_TOKEN) && CSRF_TOKEN !== 'None';
+	var RESERVATION = {{ (stay.reservation or "") | tojson }};
+	var TOKEN = {{ token | tojson }};
+	var RATING_FIELDS = {{ (["overall_rating"] + rating_fieldnames) | tojson }};
+	var SCORE_WORDS = {{ [
+		_("Very poor"), _("Poor"), _("Okay"), _("Good"), _("Excellent")
+	] | tojson }};
+
+	// Show the guest what their overall star count means, so a 3 is not mistaken for a 5.
+	var overallWord = document.getElementById('overall-word');
+	form.querySelectorAll('input[name="overall_rating"]').forEach(function (input) {
+		input.addEventListener('change', function () {
+			overallWord.textContent = SCORE_WORDS[parseInt(input.value, 10) - 1] || '';
+		});
+	});
+
+	// "Report a problem" reveals a note box for that one area.
+	form.querySelectorAll('.issue-toggle').forEach(function (btn) {
+		btn.addEventListener('click', function () {
+			var box = document.getElementById(btn.dataset.target);
+			var open = btn.getAttribute('aria-expanded') === 'true';
+			btn.setAttribute('aria-expanded', String(!open));
+			box.hidden = open;
+			if (!open) { box.querySelector('textarea').focus(); }
+		});
+	});
+
+	function collect() {
+		var payload = {
+			reservation: RESERVATION,
+			token: TOKEN,
+			issues: []
+		};
+
+		form.querySelectorAll('input[type="radio"]:checked').forEach(function (input) {
+			payload[input.name] = input.value;
+		});
+
+		form.querySelectorAll('textarea[name], input[type="text"], input[type="tel"], input[type="email"]')
+			.forEach(function (field) {
+				if (field.name) { payload[field.name] = field.value.trim(); }
+			});
+
+		form.querySelectorAll('textarea[data-issue-area]').forEach(function (field) {
+			var details = field.value.trim();
+			if (details) {
+				payload.issues.push({ area: field.dataset.issueArea, details: details });
+			}
+		});
+
+		return payload;
+	}
+
+	function hasSomethingToSay(payload) {
+		if (payload.issues.length || payload.improvements) { return true; }
+		return RATING_FIELDS.some(function (field) { return payload[field]; });
+	}
+
+	var errorBox = document.getElementById('form-error');
+	function showError(message) {
+		errorBox.textContent = message;
+		errorBox.hidden = false;
+		errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+	}
+
+	form.addEventListener('submit', function (event) {
+		event.preventDefault();
+		errorBox.hidden = true;
+
+		var payload = collect();
+		if (!hasSomethingToSay(payload)) {
+			showError({{ _("Please rate at least one area or tell us what we can improve.") | tojson }});
+			return;
+		}
+
+		var button = document.getElementById('submit-btn');
+		button.disabled = true;
+		button.textContent = {{ _("Sending…") | tojson }};
+
+		fetch('/api/method/hospitality_core.hospitality_core.api.feedback.submit_feedback', {
+			method: 'POST',
+			headers: HAS_CSRF
+				? {
+					'Content-Type': 'application/json',
+					'Accept': 'application/json',
+					'X-Frappe-CSRF-Token': CSRF_TOKEN
+				}
+				: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+			body: JSON.stringify({ payload: JSON.stringify(payload) })
+		})
+			.then(function (response) {
+				return response.json().then(function (body) {
+					return { ok: response.ok, body: body };
+				});
+			})
+			.then(function (result) {
+				var message = result.body && result.body.message;
+				if (!result.ok || !message) {
+					throw new Error(serverMessage(result.body));
+				}
+				form.hidden = true;
+				document.getElementById('thank-you-text').textContent =
+					message.message || {{ _("Your feedback has reached our management team.") | tojson }};
+				document.getElementById('thank-you').hidden = false;
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+			})
+			.catch(function (error) {
+				showError(error.message || {{ _("Something went wrong. Please try again.") | tojson }});
+				button.disabled = false;
+				button.textContent = {{ _("Send Feedback") | tojson }};
+			});
+	});
+
+	// Frappe returns its error text inside _server_messages as JSON-encoded strings.
+	function serverMessage(body) {
+		try {
+			var messages = JSON.parse(body._server_messages || '[]');
+			if (messages.length) {
+				var first = JSON.parse(messages[0]);
+				var text = document.createElement('div');
+				text.innerHTML = first.message || '';
+				return text.textContent.trim();
+			}
+		} catch (e) { /* fall through to the generic message */ }
+		return {{ _("Something went wrong. Please try again.") | tojson }};
+	}
+})();
+</script>
+</body>
+</html>

@@ -13,6 +13,93 @@ frappe.ui.form.on("Hotel Booking", {
 		frm.trigger("set_indicator");
 		frm.trigger("add_actions");
 		frm.trigger("show_summary");
+		frm.trigger("render_room_details");
+	},
+
+	arrival_date: (frm) => frm.trigger("render_room_details"),
+	departure_date: (frm) => frm.trigger("render_room_details"),
+
+	/* What the guest is buying: each category's capacity, amenities and tariff, plus a
+	 * night-by-night quote so a weekend premium is visible before the booking is taken
+	 * rather than discovered on the folio. */
+	render_room_details(frm) {
+		const field = frm.get_field("room_details_preview");
+		if (!field || !field.$wrapper) return;
+
+		const lines = (frm.doc.rooms || []).filter((l) => l.room_type);
+		if (!lines.length || !frm.doc.arrival_date || !frm.doc.departure_date) {
+			field.$wrapper.empty();
+			return;
+		}
+
+		frappe.call({
+			method: "hospitality_core.hospitality_core.api.tariff.quote_rooms",
+			args: {
+				lines: lines.map((l) => ({
+					room_type: l.room_type,
+					qty: l.qty || 1,
+					adults: l.adults || 0,
+					children: l.children || 0,
+					extra_beds_adult: l.extra_beds_adult || 0,
+					extra_beds_child: l.extra_beds_child || 0,
+				})),
+				arrival_date: frm.doc.arrival_date,
+				departure_date: frm.doc.departure_date,
+			},
+		}).then((r) => {
+			const res = r.message;
+			if (!res) {
+				field.$wrapper.empty();
+				return;
+			}
+
+			frappe.hospitality.room_details.catalog().then((types) => {
+				const money = (v) => format_currency(v, res.currency);
+				const blocks = res.lines.map((q) => {
+					const t = types.find((x) => x.name === q.room_type) || {};
+					const rows = q.nights
+						.map(
+							(n) =>
+								`<tr class="${n.weekend ? "wknd" : ""}">
+									<td>${frappe.datetime.str_to_user(n.date)}</td>
+									<td>${__(n.rate_class || (n.weekend ? "Weekend" : "Weekday"))}</td>
+									<td class="num">${money(n.rate)}</td>
+									<td class="num">${n.extra_bed ? money(n.extra_bed) : ""}</td>
+									<td class="num">${money(n.amount)}</td>
+								</tr>`
+						)
+						.join("");
+
+					return `
+						${frappe.hospitality.room_details.card(t)}
+						<div class="hc-quote">
+							<table>
+								<tbody>${rows}</tbody>
+								<tfoot><tr>
+									<td colspan="4">${__("Total")} &times; ${q.qty} ${__("room(s)")}</td>
+									<td class="num">${money(q.total)}</td>
+								</tr></tfoot>
+							</table>
+						</div>`;
+				});
+
+				const warn = (res.warnings || [])
+					.map((w) => `<div class="hc-warn">⚠ ${frappe.utils.escape_html(w)}</div>`)
+					.join("");
+
+				// Say plainly why some nights cost more, so a holiday premium does not
+				// look like a pricing bug to whoever takes the booking.
+				const holidays = res.lines.reduce((n, q) => n + (q.holiday_nights || 0), 0);
+				const note = holidays
+					? `<div class="hc-quote-note">${__(
+							"{0} night(s) are public holidays and are charged at the weekend rate.",
+							[holidays]
+					  )}</div>`
+					: "";
+
+				field.$wrapper.html(blocks.join("") + note + warn);
+			});
+		});
 	},
 
 	set_indicator(frm) {
@@ -235,12 +322,30 @@ frappe.ui.form.on("Hotel Booking", {
 frappe.ui.form.on("Hotel Booking Room", {
 	room_type(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
-		if (!row.room_type || row.rate) return;
-		// Pull the published rate so the line is priced without retyping it.
-		frappe.db.get_value("Hotel Room Type", row.room_type, "default_rate").then((r) => {
-			if (r && r.message) {
-				frappe.model.set_value(cdt, cdn, "rate", r.message.default_rate);
-			}
-		});
+		if (!row.room_type) return;
+
+		// Price the line for the actual stay window rather than pulling a flat rate:
+		// weekend nights cost more, so rate x nights would understate the booking.
+		frappe.hospitality.room_details
+			.quote(row.room_type, frm.doc.arrival_date, frm.doc.departure_date, {
+				qty: row.qty || 1,
+				adults: row.adults || 0,
+				children: row.children || 0,
+				extra_beds_adult: row.extra_beds_adult || 0,
+				extra_beds_child: row.extra_beds_child || 0,
+			})
+			.then((q) => {
+				if (q && !row.rate) {
+					frappe.model.set_value(cdt, cdn, "rate", q.average_nightly);
+				}
+				frm.trigger("render_room_details");
+			});
 	},
+
+	qty: (frm) => frm.trigger("render_room_details"),
+	adults: (frm) => frm.trigger("render_room_details"),
+	children: (frm) => frm.trigger("render_room_details"),
+	extra_beds_adult: (frm) => frm.trigger("render_room_details"),
+	extra_beds_child: (frm) => frm.trigger("render_room_details"),
+	rooms_remove: (frm) => frm.trigger("render_room_details"),
 });

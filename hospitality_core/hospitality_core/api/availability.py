@@ -191,28 +191,37 @@ def get_availability(arrival_date, departure_date, room_type=None, arrival_time=
 	holds = _soft_holds(start, end, room_type=room_type, ignore_booking=ignore_booking) \
 		if include_soft_holds else {}
 
-	types = {
-		t.name: {
-			"room_type": t.name,
-			"default_rate": t.default_rate,
-			"max_adults": t.max_adults,
+	# The catalog carries capacity, tariff and amenities, so every consumer of this
+	# payload can describe a category without a second round trip.
+	from hospitality_core.hospitality_core.api import tariff
+
+	types = {}
+	for t in tariff.get_room_type_catalog(only_active=False, room_type=room_type):
+		types[t["name"]] = {
+			"room_type": t["name"],
+			"default_rate": t["default_rate"],
+			"weekend_rate": t["weekend_rate"],
+			"has_weekend_premium": t["has_weekend_premium"],
+			"max_adults": t["max_adults"],
+			"max_occupancy": t["max_occupancy"],
+			"bedroom_configuration": t["bedroom_configuration"],
+			"amenities": t["amenities"],
+			"extra_bed_adult_rate": t["extra_bed_adult_rate"],
+			"extra_bed_child_rate": t["extra_bed_child_rate"],
 			"total": 0,
 			"occupied": 0,
 			"out_of_order": 0,
-			"held": cint(holds.get(t.name)),
+			"held": cint(holds.get(t["name"])),
 			"free": 0,
 		}
-		for t in frappe.get_all(
-			"Hotel Room Type",
-			filters={"name": room_type} if room_type else {},
-			fields=["name", "default_rate", "max_adults"],
-		)
-	}
 
 	detail = []
 	for room in rooms:
 		bucket = types.setdefault(room.room_type, {
-			"room_type": room.room_type, "default_rate": 0, "max_adults": 0,
+			"room_type": room.room_type, "default_rate": 0, "weekend_rate": 0,
+			"has_weekend_premium": False, "max_adults": 0, "max_occupancy": 0,
+			"bedroom_configuration": None, "amenities": [],
+			"extra_bed_adult_rate": 0, "extra_bed_child_rate": 0,
 			"total": 0, "occupied": 0, "out_of_order": 0,
 			"held": cint(holds.get(room.room_type)), "free": 0,
 		})
@@ -235,6 +244,9 @@ def get_availability(arrival_date, departure_date, room_type=None, arrival_time=
 			"hotel_reception": room.hotel_reception,
 			"available": blocked_by is None,
 			"blocked_by": blocked_by,
+			"max_occupancy": bucket.get("max_occupancy"),
+			"bedroom_configuration": bucket.get("bedroom_configuration"),
+			"amenities": bucket.get("amenities", []),
 		})
 
 	for bucket in types.values():

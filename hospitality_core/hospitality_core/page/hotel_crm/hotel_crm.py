@@ -11,7 +11,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime, nowdate
 
-from hospitality_core.hospitality_core.api import availability, telephony
+from hospitality_core.hospitality_core.api import availability, tariff, telephony
 
 # Queues the left-hand list can show.
 QUEUE_DUE = "due"
@@ -34,11 +34,9 @@ def get_console_data():
         "Hotel Enquiry Source", filters={"is_active": 1}, fields=["name"], order_by="name asc"
     )
     lost_reasons = frappe.get_all("Hotel Lost Reason", fields=["name"], order_by="name asc")
-    room_types = frappe.get_all(
-        "Hotel Room Type",
-        fields=["name", "default_rate", "max_adults", "max_children"],
-        order_by="name asc",
-    )
+    # The full catalog, so a sales agent quoting on the phone can see capacity,
+    # weekend tariff and what is in the room without leaving the console.
+    room_types = tariff.get_room_type_catalog()
 
     return {
         "statuses": statuses,

@@ -114,7 +114,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Operations",
-   "link_count": 0,
+   "link_count": 4,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -145,6 +145,16 @@
    "label": "Hotel Group Booking",
    "link_count": 0,
    "link_to": "Hotel Group Booking",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Guest Feedback",
+   "link_count": 0,
+   "link_to": "Guest Feedback",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -495,7 +505,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-09-11 18:01:09.673327",
+ "modified": "2026-09-11 19:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hospitality",

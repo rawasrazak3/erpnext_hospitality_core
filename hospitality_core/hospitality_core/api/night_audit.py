@@ -1,11 +1,9 @@
 import frappe
 from frappe import _
-from frappe.utils import add_days, nowdate, getdate, flt
+from frappe.utils import add_days, cint, nowdate, getdate, flt
 
 from hospitality_core.hospitality_core.api.folio import sync_folio_balance, mirror_to_company_folio, mirror_to_group_folio
-from hospitality_core.hospitality_core.doctype.hotel_room_type.hotel_room_type import (
-    get_rate_for_date,
-)
+from hospitality_core.hospitality_core.api.tariff import nightly_rate, _rates_for
 
 def run_daily_audit():
     """
@@ -139,7 +137,8 @@ def process_single_reservation(res, posting_date):
 
     # Step C: Get Base Rate and post room charge
     daily_rate = get_rate(res.rate_plan, res.room_type, posting_date)
-    
+    daily_rate += get_extra_bed_charge(res, posting_date)
+
     if daily_rate > 0:
         post_room_charge(res, daily_rate, posting_date)
         return True
@@ -197,6 +196,26 @@ def handle_overstay(res):
             "Night Audit overstay clash",
         )
 
+def get_extra_bed_charge(res, date=None):
+    """Nightly extra-bed charge for a reservation, or 0 if it has none.
+
+    Extra beds are what a guest beyond the room's Max Allowed costs, and they are
+    charged for every night of the stay alongside the room itself.
+    """
+    adults = cint(res.get("extra_beds_adult"))
+    children = cint(res.get("extra_beds_child"))
+    if not (adults or children):
+        return 0.0
+
+    beds = frappe.db.get_value(
+        "Hotel Room Type", res.room_type,
+        ["extra_bed_adult_rate", "extra_bed_child_rate"], as_dict=True,
+    ) or {}
+    return (adults * flt(beds.get("extra_bed_adult_rate"))) + (
+        children * flt(beds.get("extra_bed_child_rate"))
+    )
+
+
 def get_rate(rate_plan, room_type, date):
     """The nightly tariff for one night of one reservation.
 
@@ -209,7 +228,7 @@ def get_rate(rate_plan, room_type, date):
         if getdate(plan.valid_from) <= getdate(date) <= getdate(plan.valid_to):
             return plan.rate
 
-    return get_rate_for_date(room_type, date)
+    return nightly_rate(_rates_for(room_type), date)
 
 def post_room_charge(res, base_amount, date):
     """

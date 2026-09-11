@@ -19,6 +19,7 @@ frappe.ui.form.on('Hotel Reservation', {
     refresh: function (frm) {
         // Keep room type aligned with the selected room on load and refresh.
         sync_room_type_from_room(frm);
+        render_room_details(frm);
 
         // Filter Rooms based on Room Type AND Availability
         frm.set_query('room', function () {
@@ -92,6 +93,8 @@ frappe.ui.form.on('Hotel Reservation', {
                                             indicator: 'green'
                                         });
                                         frm.reload_doc();
+                                        // Check-out is the moment the guest will answer, so ask now.
+                                        prompt_feedback_whatsapp(frm);
                                     }
                                 }
                             });
@@ -128,6 +131,13 @@ frappe.ui.form.on('Hotel Reservation', {
                         }
                     );
                 }, null).addClass('btn-danger'); // Add class for styling if possible, or just standard custom button
+            }
+
+            // FEEDBACK LINK — available from check-in onward so it can be resent if missed.
+            if (['Checked In', 'Checked Out'].includes(frm.doc.status)) {
+                frm.add_custom_button(__('Send Feedback Link (WhatsApp)'), function () {
+                    prompt_feedback_whatsapp(frm);
+                }, __('Guest'));
             }
 
             // Quick Access to Folio
@@ -270,6 +280,29 @@ frappe.ui.form.on('Hotel Reservation', {
     room: function (frm) {
         sync_room_type_from_room(frm);
         render_room_rate_preview(frm);
+        render_room_details(frm);
+    },
+
+    room_type: function (frm) {
+        render_room_details(frm);
+    },
+
+    adults: function (frm) {
+        render_room_details(frm);
+    },
+
+    children: function (frm) {
+        render_room_details(frm);
+    },
+
+    extra_beds_adult: function (frm) {
+        render_room_rate_preview(frm);
+        render_room_details(frm);
+    },
+
+    extra_beds_child: function (frm) {
+        render_room_rate_preview(frm);
+        render_room_details(frm);
     },
     
     rate_plan: function (frm) {
@@ -288,6 +321,37 @@ frappe.ui.form.on('Hotel Reservation', {
         render_room_rate_preview(frm);
     }
 });
+
+/* The room's capacity, amenities and tariff, shown beside the room field so the desk can
+ * answer "how many fit" and "does it have a TV" without opening the Room Type. */
+function render_room_details(frm) {
+    const room_type = frm.doc.room_type;
+    if (!room_type) {
+        const field = frm.get_field('room_details_preview');
+        if (field && field.$wrapper) field.$wrapper.empty();
+        return;
+    }
+
+    frappe.hospitality.room_details.get(room_type).then((t) => {
+        const field = frm.get_field('room_details_preview');
+        if (!field || !field.$wrapper) return;
+
+        let html = frappe.hospitality.room_details.card(t);
+
+        // Flag a party that does not fit before it becomes a problem at check-in.
+        const guests = cint(frm.doc.adults) + cint(frm.doc.children);
+        const beds = cint(frm.doc.extra_beds_adult) + cint(frm.doc.extra_beds_child);
+        const cap = cint(t && t.max_occupancy);
+        if (cap && guests > cap + beds) {
+            html += `<div class="hc-warn">&#9888; ${__(
+                '{0} guests exceed the {1} this room allows. Add {2} extra bed(s).',
+                [guests, cap, guests - cap - beds]
+            )}</div>`;
+        }
+
+        field.$wrapper.html(html);
+    });
+}
 
 function sync_room_type_from_room(frm) {
     if (!frm.doc.room) {
@@ -414,4 +478,83 @@ function validate_room_availability(frm) {
             }
         });
     }
+}
+// --- GUEST FEEDBACK HAND-OFF ----------------------------------------------------------
+// Opens a wa.me redirect carrying a pre-written message and the guest's feedback link.
+// Nothing is sent from the server: the staff member sends it from their own WhatsApp,
+// so this works without any WhatsApp Business API account.
+function prompt_feedback_whatsapp(frm) {
+    frappe.call({
+        method: 'hospitality_core.hospitality_core.api.feedback.get_whatsapp_feedback_link',
+        args: { reservation: frm.doc.name },
+        freeze: true,
+        freeze_message: __('Preparing feedback link...'),
+        callback: function (r) {
+            if (r.exc || !r.message) {
+                return;
+            }
+            show_feedback_whatsapp_dialog(r.message);
+        }
+    });
+}
+
+function show_feedback_whatsapp_dialog(data) {
+    const dialog = new frappe.ui.Dialog({
+        title: __('Send Feedback Link'),
+        fields: [
+            {
+                fieldname: 'mobile_no',
+                fieldtype: 'Data',
+                label: __('Guest WhatsApp Number'),
+                default: data.mobile_no || '',
+                reqd: 1,
+                description: __('Include the country code, e.g. 919876543210.')
+            },
+            {
+                fieldname: 'no_mobile_warning',
+                fieldtype: 'HTML',
+                options: data.has_mobile
+                    ? ''
+                    : `<p class="text-muted small">${__(
+                        'No mobile number is saved for this guest. Enter one to continue.'
+                    )}</p>`
+            },
+            { fieldname: 'sb', fieldtype: 'Section Break' },
+            {
+                fieldname: 'message',
+                fieldtype: 'Small Text',
+                label: __('Message'),
+                default: data.message,
+                description: __('Edit if you like — this is what WhatsApp will open with.')
+            },
+            {
+                fieldname: 'link_html',
+                fieldtype: 'HTML',
+                options: `<p class="text-muted small">${__('Feedback link')}:
+                    <a href="${frappe.utils.escape_html(data.feedback_url)}" target="_blank"
+                       rel="noopener">${frappe.utils.escape_html(data.feedback_url)}</a></p>`
+            }
+        ],
+        primary_action_label: __('Open WhatsApp'),
+        primary_action: function (values) {
+            const digits = (values.mobile_no || '').replace(/\D/g, '');
+            if (!digits) {
+                frappe.msgprint(__('Enter the guest\'s WhatsApp number, including the country code.'));
+                return;
+            }
+            dialog.hide();
+            // Opened from this click so the browser does not treat it as a pop-up.
+            window.open(
+                `https://wa.me/${digits}?text=${encodeURIComponent(values.message || data.message)}`,
+                '_blank',
+                'noopener'
+            );
+        },
+        secondary_action_label: __('Copy Link'),
+        secondary_action: function () {
+            frappe.utils.copy_to_clipboard(data.feedback_url);
+        }
+    });
+
+    dialog.show();
 }

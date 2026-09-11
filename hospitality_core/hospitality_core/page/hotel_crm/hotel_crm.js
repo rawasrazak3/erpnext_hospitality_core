@@ -697,10 +697,29 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 								}>${frappe.utils.escape_html(t.name)}</option>`
 						)
 						.join('');
+					const t = types.find((x) => x.name === l.room_type) || {};
+					const cap = cint(t.max_occupancy) * Math.max(cint(l.qty) || 1, 1);
+					const heads = (cint(l.adults) || 0) + (cint(l.children) || 0);
+					const over = cap && heads > cap;
+					const amen = (t.amenities || []).map((a) => a.icon).join(' ');
+					const meta = [
+						t.bedroom_configuration || '',
+						t.max_occupancy ? __('Max {0}', [t.max_occupancy]) : '',
+						amen,
+					].filter(Boolean).join(' &middot; ');
+					const wknd = t.has_weekend_premium
+						? `<div class="hcrm-line-meta">${__('Weekend')} ${format_currency(t.weekend_rate)}</div>`
+						: '';
+
 					return `<tr data-i="${i}">
-						<td><select class="form-control input-sm l-room_type">${opts}</select></td>
+						<td><select class="form-control input-sm l-room_type">${opts}</select>
+							${meta ? `<div class="hcrm-line-meta">${meta}</div>` : ''}${wknd}</td>
 						<td><input type="number" min="1" class="form-control input-sm l-qty" value="${l.qty || 1}"></td>
-						<td><input type="number" min="1" class="form-control input-sm l-adults" value="${l.adults || 2}"></td>
+						<td><input type="number" min="1" class="form-control input-sm l-adults${
+							over ? ' hcrm-over' : ''
+						}" value="${l.adults || 2}"${
+							over ? ` title="${__('Exceeds the {0} this category allows', [cap])}"` : ''
+						}></td>
 						<td><input type="number" min="0" step="any" class="form-control input-sm l-rate_quoted" value="${
 							l.rate_quoted || 0
 						}"></td>

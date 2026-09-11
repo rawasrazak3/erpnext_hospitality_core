@@ -10,16 +10,32 @@ app_include_js = [
     "/assets/hospitality_core/js/pos_room_selection.js",
     "/assets/hospitality_core/js/pos_invoice_auto_print.js",
     "/assets/hospitality_core/js/payment_entry_auto_print.js",
-    "/assets/hospitality_core/js/pos_payment_control.js"
+    "/assets/hospitality_core/js/pos_payment_control.js",
+    "/assets/hospitality_core/js/room_details.js"
 ]
 
 app_include_css = [
-    "/assets/hospitality_core/css/print_format.css"
+    "/assets/hospitality_core/css/print_format.css",
+    "/assets/hospitality_core/css/room_details.css"
 ]
 
 
 # Document Events
+_CLEAR_HOLIDAY_CACHE = (
+    "hospitality_core.hospitality_core.doctype.hotel_room_type.hotel_room_type"
+    ".clear_holiday_cache"
+)
+
 doc_events = {
+    # Holiday dates are cached for tariff lookups, so editing the calendar has to
+    # invalidate them or a newly added holiday would keep pricing as a weekday.
+    "Holiday List": {
+        "on_update": _CLEAR_HOLIDAY_CACHE,
+        "on_trash": _CLEAR_HOLIDAY_CACHE,
+    },
+    "Hospitality Accounting Settings": {
+        "on_update": _CLEAR_HOLIDAY_CACHE,
+    },
     "Guest Folio": {
         "on_update": "hospitality_core.hospitality_core.api.folio.sync_folio_balance"
     },

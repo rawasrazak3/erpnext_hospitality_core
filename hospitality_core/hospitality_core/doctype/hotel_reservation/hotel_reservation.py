@@ -4,7 +4,9 @@ from frappe.model.document import Document
 from frappe.utils import getdate, nowdate, add_days, flt, now_datetime
 from hospitality_core.hospitality_core.api.reservation import check_availability, create_folio
 # Imports for immediate billing logic
-from hospitality_core.hospitality_core.api.night_audit import post_room_charge, get_rate, already_charged_today
+from hospitality_core.hospitality_core.api.night_audit import (
+    post_room_charge, get_rate, get_extra_bed_charge, already_charged_today
+)
 
 class HotelReservation(Document):
     def validate(self):
@@ -135,6 +137,7 @@ class HotelReservation(Document):
 
             if not already_charged_today(self.folio, charge_date, room=self.room):
                 rate = get_rate(self.rate_plan, self.room_type, charge_date)
+                rate += get_extra_bed_charge(self, charge_date)
                 if rate > 0:
                     post_room_charge(self, rate, charge_date)
                     frappe.msgprint(_("Check-in successful. Room charged {0} for date {1}.").format(rate, charge_date))

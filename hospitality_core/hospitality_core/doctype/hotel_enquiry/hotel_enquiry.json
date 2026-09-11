@@ -28,6 +28,7 @@
   "flexible_dates",
   "sec_rooms",
   "room_lines",
+  "room_details_preview",
   "sec_money",
   "budget",
   "col_break_money",
@@ -328,11 +329,16 @@
    "no_copy": 1,
    "options": "Hotel Booking",
    "read_only": 1
+  },
+  {
+   "fieldname": "room_details_preview",
+   "fieldtype": "HTML",
+   "label": "Room Details"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-03 01:00:00.000000",
+ "modified": "2026-09-11 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hotel Enquiry",

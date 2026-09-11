@@ -733,3 +733,18 @@
 	color: var(--primary, #2490ef);
 	opacity: 0.75;
 }
+
+/* Room-type context inside a quote line: bed layout, capacity and amenities, so an
+   agent quoting on the phone can answer "does it have a pool" without navigating away. */
+.hcrm-line-meta {
+	font-size: 10px;
+	color: var(--text-muted, #6b7280);
+	margin-top: 2px;
+	line-height: 1.4;
+}
+.hcrm-lines input.hcrm-over {
+	border-color: #dc2626;
+	background: #fef2f2;
+	color: #991b1b;
+	font-weight: 600;
+}

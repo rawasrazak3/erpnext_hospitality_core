@@ -19,11 +19,12 @@
         "max_adults",
         "max_children",
         "sec_tariff",
+        "pricing_basis",
         "default_rate",
         "weekend_rate",
         "column_break_tariff_1",
-        "extra_person_rate_weekday",
-        "extra_person_rate_weekend",
+        "per_head_rate_weekday",
+        "per_head_rate_weekend",
         "column_break_tariff_2",
         "extra_bed_adult_rate",
         "extra_bed_child_rate",
@@ -131,16 +132,16 @@
             "fieldtype": "Column Break"
         },
         {
-            "description": "Per extra head, per day, on weekdays (W/Head/Day).",
-            "fieldname": "extra_person_rate_weekday",
+            "description": "Weekday tariff per guest per day. Equals Default Rate / Max Allowed.",
+            "fieldname": "per_head_rate_weekday",
             "fieldtype": "Currency",
-            "label": "Extra Person / Head / Day (Weekday)"
+            "label": "Per Head / Day (Weekday)"
         },
         {
-            "description": "Per extra head, per day, on weekends (WE/Head/Day).",
-            "fieldname": "extra_person_rate_weekend",
+            "description": "Weekend tariff per guest per day. Equals Weekend Rate / Max Allowed.",
+            "fieldname": "per_head_rate_weekend",
             "fieldtype": "Currency",
-            "label": "Extra Person / Head / Day (Weekend)"
+            "label": "Per Head / Day (Weekend)"
         },
         {
             "fieldname": "column_break_tariff_2",
@@ -149,12 +150,14 @@
         {
             "fieldname": "extra_bed_adult_rate",
             "fieldtype": "Currency",
-            "label": "Extra Bed / Adult"
+            "label": "Extra Bed / Adult",
+            "description": "Per extra bed, per night, for a guest beyond Max Allowed."
         },
         {
             "fieldname": "extra_bed_child_rate",
             "fieldtype": "Currency",
-            "label": "Extra Bed / Child"
+            "label": "Extra Bed / Child",
+            "description": "Per extra child bed, per night, for a guest beyond Max Allowed."
         },
         {
             "fieldname": "sec_amenities",
@@ -193,11 +196,20 @@
             "fieldname": "has_private_pool",
             "fieldtype": "Check",
             "label": "Private Pool"
+        },
+        {
+            "default": "Flat Room Rate",
+            "fieldname": "pricing_basis",
+            "fieldtype": "Select",
+            "label": "Pricing Basis",
+            "options": "Flat Room Rate\nPer Head",
+            "reqd": 1,
+            "description": "Flat Room Rate charges the nightly tariff whatever the headcount, up to Max Allowed. Per Head charges guests x the per-head rate instead."
         }
     ],
     "index_web_pages_for_search": 1,
     "links": [],
-    "modified": "2026-09-11 10:00:00.000000",
+    "modified": "2026-09-11 12:00:00.000000",
     "modified_by": "Administrator",
     "module": "Hospitality Core",
     "name": "Hotel Room Type",

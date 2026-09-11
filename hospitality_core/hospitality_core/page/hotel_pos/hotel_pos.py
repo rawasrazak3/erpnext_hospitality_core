@@ -1,16 +1,18 @@
 import frappe
 from frappe import _
-from frappe.utils import getdate, flt
+from frappe.utils import cint, getdate, flt
 
 from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import BLOCKED_STATUSES
+from hospitality_core.hospitality_core.api import tariff
 import json
 
 @frappe.whitelist()
 def get_pos_data(arrival, departure, arrival_time=None, departure_time=None):
-    """
-    Returns live room inventory for the specified date+time range.
-    Rooms are marked Available, Occupied, or Maintenance.
-    Also returns room type metadata for grouping.
+    """Live room inventory for a date+time range, priced for the actual stay.
+
+    Each room carries its category's capacity and amenities so the grid can show what
+    the guest is buying, and a `stay_total` priced night by night — a weekend stay costs
+    more than `rate x nights` and the cart has to say so.
     """
     if getdate(departure) < getdate(arrival):
         return {"rooms": [], "room_types": []}
@@ -20,16 +22,22 @@ def get_pos_data(arrival, departure, arrival_time=None, departure_time=None):
     dep_time = departure_time or "12:00:00"
 
     rooms = frappe.get_all("Hotel Room",
-        fields=["name", "room_type", "status", "is_enabled"],
+        fields=["name", "room_type", "status", "is_enabled", "floor"],
         order_by="room_type asc, name asc"
     )
 
-    # Fetch room types with rates and descriptions
-    room_types = frappe.get_all("Hotel Room Type",
-        fields=["name", "default_rate", "max_adults", "max_children", "description"],
-        order_by="name asc"
-    )
-    rate_map = {rt.name: flt(rt.default_rate) for rt in room_types}
+    # One catalog read gives capacity, tariff and amenities for every category.
+    room_types = tariff.get_room_type_catalog()
+    type_map = {rt["name"]: rt for rt in room_types}
+
+    # Price each category once for this exact window rather than per room card.
+    quote_map = {}
+    for rt in room_types:
+        try:
+            quote_map[rt["name"]] = tariff.quote_stay(rt["name"], arrival, departure)
+        except Exception:
+            # A category with a broken tariff must not take the whole grid down.
+            quote_map[rt["name"]] = None
 
     # Fetch overlapping reservations using full datetime comparison
     # CONCAT(date, time) builds a full datetime for accurate overlap detection
@@ -52,19 +60,75 @@ def get_pos_data(arrival, departure, arrival_time=None, departure_time=None):
         elif room.name in conflict_rooms:
             status = "Occupied"
 
+        rt = type_map.get(room.room_type) or {}
+        quote = quote_map.get(room.room_type)
+
         pos_rooms.append({
             "name": room.name,
             "room_type": room.room_type,
-            "rate": rate_map.get(room.room_type, 0.0),
-            "status": status
+            "status": status,
+            "floor": room.floor,
+            # `rate` stays the headline nightly figure the card shows; `stay_total` is
+            # what the cart actually charges for these dates.
+            "rate": flt(rt.get("default_rate")),
+            "weekend_rate": flt(rt.get("weekend_rate")),
+            "has_weekend_premium": bool(rt.get("has_weekend_premium")),
+            "stay_total": flt(quote["total"]) if quote else 0.0,
+            "average_nightly": flt(quote["average_nightly"]) if quote else 0.0,
+            "nights_breakdown": quote["nights"] if quote else [],
+            "max_occupancy": cint(rt.get("max_occupancy")),
+            "bedroom_configuration": rt.get("bedroom_configuration"),
+            "amenities": rt.get("amenities", []),
+            "extra_bed_adult_rate": flt(rt.get("extra_bed_adult_rate")),
+            "extra_bed_child_rate": flt(rt.get("extra_bed_child_rate")),
         })
 
     return {
         "rooms": pos_rooms,
-        "room_types": [{"name": rt.name, "rate": flt(rt.default_rate),
-                        "max_adults": rt.max_adults, "description": rt.description}
-                       for rt in room_types]
+        "room_types": room_types,
     }
+
+def _split_party(room_count, adults, children):
+    """Spread a party across rooms as evenly as the numbers allow.
+
+    Four adults over two rooms is 2 and 2; five is 3 and 2. The remainder goes to the
+    earlier rooms, which is what a front desk does by hand.
+    """
+    room_count = max(room_count, 1)
+    split = []
+    for i in range(room_count):
+        split.append((
+            adults // room_count + (1 if i < adults % room_count else 0),
+            children // room_count + (1 if i < children % room_count else 0),
+        ))
+    return split
+
+
+def validate_party_fits(rooms, adults, children):
+    """Refuse a booking that puts more people in the rooms than they allow.
+
+    Checked here rather than only in the browser: the POS is not the only caller, and a
+    room sold over its capacity becomes a complaint at check-in.
+    """
+    if not rooms:
+        frappe.throw(_("Select at least one room."))
+
+    guests = int(adults or 0) + int(children or 0)
+    if not guests:
+        return
+
+    capacity = 0
+    for room in rooms:
+        room_type = frappe.db.get_value("Hotel Room", room, "room_type")
+        capacity += cint(frappe.db.get_value("Hotel Room Type", room_type, "max_occupancy"))
+
+    if capacity and guests > capacity:
+        frappe.throw(
+            _("{0} guests exceed the {1} allowed across the {2} selected room(s). "
+              "Add another room, or add extra beds on the reservation.")
+            .format(guests, capacity, len(rooms))
+        )
+
 
 @frappe.whitelist()
 def search_guests(query):
@@ -188,8 +252,15 @@ def submit_pos_booking(payload):
             departure_time_str = std_out
 
     # 2. Create Reservations (one per room)
+    rooms = data.get("rooms", [])
+    adults = int(data.get("adults") or 1)
+    children = int(data.get("children") or 0)
+    validate_party_fits(rooms, adults, children)
+
     reservations = []
-    for room in data.get("rooms", []):
+    # The party is spread across the selected rooms so each reservation carries a
+    # believable headcount, rather than every room claiming the whole group.
+    for room, (room_adults, room_children) in zip(rooms, _split_party(len(rooms), adults, children)):
         res = frappe.get_doc({
             "doctype": "Hotel Reservation",
             "guest": guest,
@@ -198,7 +269,8 @@ def submit_pos_booking(payload):
             "arrival_time": arrival_time_str,
             "departure_date": departure_date_str,
             "departure_time": departure_time_str,
-            "adults": int(data.get("adults") or 1),
+            "adults": room_adults,
+            "children": room_children,
             "status": "Reserved",
             "hotel_reception": reception,
             "room_type": frappe.db.get_value("Hotel Room", room, "room_type")

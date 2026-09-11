@@ -1,0 +1,340 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:GFB-{YYYY}-{MM}-{#####}",
+ "creation": "2026-09-11 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_stay",
+  "reservation",
+  "guest",
+  "guest_name",
+  "column_break_stay_1",
+  "room",
+  "mobile_no",
+  "email_id",
+  "column_break_stay_2",
+  "arrival_date",
+  "departure_date",
+  "section_ratings",
+  "overall_rating",
+  "average_rating",
+  "column_break_rating_1",
+  "room_neatness",
+  "food_quality",
+  "air_conditioning",
+  "television",
+  "other_electronics",
+  "column_break_rating_2",
+  "maintenance",
+  "wifi",
+  "staff_service",
+  "check_in_experience",
+  "value_for_money",
+  "section_issues",
+  "issues",
+  "section_comments",
+  "what_went_well",
+  "improvements",
+  "would_recommend",
+  "section_followup",
+  "status",
+  "needs_follow_up",
+  "column_break_followup",
+  "assigned_to",
+  "internal_notes",
+  "section_meta",
+  "source",
+  "submitted_on",
+  "column_break_meta",
+  "submitted_from_ip"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_stay",
+   "fieldtype": "Section Break",
+   "label": "Guest & Stay"
+  },
+  {
+   "fieldname": "reservation",
+   "fieldtype": "Link",
+   "label": "Reservation",
+   "options": "Hotel Reservation",
+   "read_only": 1,
+   "description": "Set automatically when the guest opens the link sent at check-out."
+  },
+  {
+   "fieldname": "guest",
+   "fieldtype": "Link",
+   "label": "Guest",
+   "options": "Guest",
+   "read_only": 1
+  },
+  {
+   "fieldname": "guest_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Guest Name"
+  },
+  {
+   "fieldname": "column_break_stay_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "room",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Room",
+   "options": "Hotel Room"
+  },
+  {
+   "fieldname": "mobile_no",
+   "fieldtype": "Data",
+   "label": "Mobile No",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "email_id",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "column_break_stay_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "arrival_date",
+   "fieldtype": "Date",
+   "label": "Arrival Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "departure_date",
+   "fieldtype": "Date",
+   "label": "Departure Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_ratings",
+   "fieldtype": "Section Break",
+   "label": "Ratings",
+   "description": "1 = Poor, 5 = Excellent. 0 means the guest did not rate that area."
+  },
+  {
+   "fieldname": "overall_rating",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Overall Stay",
+   "bold": 1
+  },
+  {
+   "fieldname": "average_rating",
+   "fieldtype": "Float",
+   "label": "Average of Rated Areas",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_rating_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "room_neatness",
+   "fieldtype": "Int",
+   "label": "Room Neatness / Housekeeping"
+  },
+  {
+   "fieldname": "food_quality",
+   "fieldtype": "Int",
+   "label": "Food & Beverage"
+  },
+  {
+   "fieldname": "air_conditioning",
+   "fieldtype": "Int",
+   "label": "Air Conditioning"
+  },
+  {
+   "fieldname": "television",
+   "fieldtype": "Int",
+   "label": "Television"
+  },
+  {
+   "fieldname": "other_electronics",
+   "fieldtype": "Int",
+   "label": "Other Electronics (Lights, Geyser, Sockets)"
+  },
+  {
+   "fieldname": "column_break_rating_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "maintenance",
+   "fieldtype": "Int",
+   "label": "Maintenance & Repairs"
+  },
+  {
+   "fieldname": "wifi",
+   "fieldtype": "Int",
+   "label": "Wi-Fi / Internet"
+  },
+  {
+   "fieldname": "staff_service",
+   "fieldtype": "Int",
+   "label": "Staff Service"
+  },
+  {
+   "fieldname": "check_in_experience",
+   "fieldtype": "Int",
+   "label": "Check-in / Check-out Experience"
+  },
+  {
+   "fieldname": "value_for_money",
+   "fieldtype": "Int",
+   "label": "Value for Money"
+  },
+  {
+   "fieldname": "section_issues",
+   "fieldtype": "Section Break",
+   "label": "Issues Reported"
+  },
+  {
+   "fieldname": "issues",
+   "fieldtype": "Table",
+   "label": "Issues",
+   "options": "Guest Feedback Issue"
+  },
+  {
+   "fieldname": "section_comments",
+   "fieldtype": "Section Break",
+   "label": "In the Guest's Words"
+  },
+  {
+   "fieldname": "what_went_well",
+   "fieldtype": "Small Text",
+   "label": "What Went Well"
+  },
+  {
+   "fieldname": "improvements",
+   "fieldtype": "Text",
+   "label": "What Could We Do Better"
+  },
+  {
+   "fieldname": "would_recommend",
+   "fieldtype": "Select",
+   "label": "Would Recommend Us",
+   "options": "\nYes\nMaybe\nNo"
+  },
+  {
+   "fieldname": "section_followup",
+   "fieldtype": "Section Break",
+   "label": "Follow-up"
+  },
+  {
+   "default": "New",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "New\nUnder Review\nActioned\nClosed",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "needs_follow_up",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Needs Follow-up",
+   "read_only": 1,
+   "description": "Set automatically when any area is rated 1 or 2, an issue is logged, or the guest would not recommend us."
+  },
+  {
+   "fieldname": "column_break_followup",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "label": "Owner of Follow-up",
+   "options": "User"
+  },
+  {
+   "fieldname": "internal_notes",
+   "fieldtype": "Text",
+   "label": "Internal Notes",
+   "description": "Not visible to the guest."
+  },
+  {
+   "fieldname": "section_meta",
+   "fieldtype": "Section Break",
+   "label": "Submission"
+  },
+  {
+   "default": "Web",
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "options": "Web\nWhatsApp Link\nQR Code\nFront Desk",
+   "read_only": 1
+  },
+  {
+   "fieldname": "submitted_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_meta",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "submitted_from_ip",
+   "fieldtype": "Data",
+   "label": "Submitted From IP",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-11 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hospitality Core",
+ "name": "Guest Feedback",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hospitality User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "guest_name,room,reservation",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "title_field": "guest_name",
+ "track_changes": 1
+}
