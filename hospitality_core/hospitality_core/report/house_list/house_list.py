@@ -39,8 +39,8 @@ def execute(filters=None):
         LEFT JOIN
             `tabGuest Folio` folio ON res.folio = folio.name
         WHERE
-            CAST(CONCAT(res.arrival_date, ' ', IFNULL(NULLIF(res.arrival_time, ''), '14:00:00')) AS DATETIME) <= %(check_dt)s
-            AND CAST(CONCAT(res.departure_date, ' ', IFNULL(NULLIF(res.departure_time, ''), '12:00:00')) AS DATETIME) > %(check_dt)s
+            res.arrival_date <= %(check_dt)s
+            AND res.departure_date > %(check_dt)s
             AND res.status IN ('Checked In', 'Checked Out')
         ORDER BY
             CASE WHEN res.room REGEXP '^[0-9]+$' THEN 0 ELSE 1 END,
@@ -48,7 +48,7 @@ def execute(filters=None):
             res.room
     """
 
-    data = frappe.db.sql(sql, {"check_dt": f"{target_date} 14:00:00"}, as_dict=True)
+    data = frappe.db.sql(sql, {"check_dt": target_date}, as_dict=True)
     
     # Add Total Rooms Occupied count
     report_summary = []

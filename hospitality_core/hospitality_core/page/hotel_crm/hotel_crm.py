@@ -156,6 +156,7 @@ def save_enquiry(payload):
         "enquiry_owner", "hotel_reception", "check_in_date", "check_out_date",
         "adults", "children", "flexible_dates", "budget", "next_follow_up",
         "lost_reason", "lost_notes", "notes",
+        "discount_type", "discount_value", "remarks",
     ):
         if field in data:
             doc.set(field, data.get(field) or None)
@@ -171,6 +172,11 @@ def save_enquiry(payload):
                 "adults": cint(line.get("adults")),
                 "children": cint(line.get("children")),
                 "rate_quoted": flt(line.get("rate_quoted")),
+                # A rate the agent typed is an agreement with the guest; the flag is what
+                # stops every later save recomputing it back to the tariff.
+                "is_rate_overridden": cint(line.get("is_rate_overridden")),
+                "extra_beds_adult": cint(line.get("extra_beds_adult")),
+                "extra_beds_child": cint(line.get("extra_beds_child")),
             })
 
     doc.save()
@@ -479,9 +485,18 @@ def create_booking_from_enquiry(enquiry, action="hold", hold_hours=24):
                 "adults": line.adults,
                 "children": line.children,
                 "rate": line.rate_quoted,
+                # The agreed rate and any extra beds the enquiry already priced.
+                "is_rate_overridden": cint(line.is_rate_overridden),
+                "extra_beds_adult": cint(line.extra_beds_adult),
+                "extra_beds_child": cint(line.extra_beds_child),
             }
             for line in doc.room_lines
         ],
+        # The discount and the note belong to the quote as a whole, so they move to the
+        # booking as a whole and from there onto every reservation it creates.
+        "discount_type": doc.discount_type or None,
+        "discount_value": flt(doc.discount_value),
+        "remarks": doc.remarks or None,
     })
     booking.insert(ignore_permissions=True)
 

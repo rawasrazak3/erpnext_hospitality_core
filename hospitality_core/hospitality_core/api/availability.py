@@ -9,10 +9,14 @@ and again in the availability tool and tape chart. They drifted: some respected
 Everything that needs to know whether a room is free should call `get_availability` or
 `get_free_rooms` here.
 
-Two kinds of thing occupy a room:
+Three kinds of thing occupy a room:
 
   1. A Hotel Reservation in a blocking status. A real room is assigned.
-  2. An unassigned Hotel Booking Room line on a Tentative or Confirmed booking — a
+  2. A "room hold": a Hotel Booking Room line on a Tentative or Confirmed booking that
+     already names a room but has no reservation yet (a hold placed on a specific room).
+     It blocks that room exactly as a reservation would — without this, a room held on
+     a Tentative booking still showed as free on the POS and could be sold twice.
+  3. An unassigned Hotel Booking Room line on a Tentative or Confirmed booking — a
      "soft hold". The guest has a room type but no room number yet, so it consumes
      capacity of that type without blocking any particular room.
 
@@ -24,7 +28,6 @@ import frappe
 from frappe import _
 from frappe.utils import cint, getdate
 
-from hospitality_core.hospitality_core.api.reservation import _make_datetime
 from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import (
 	BLOCKED_STATUSES,
 	blocked_reason,
@@ -37,14 +40,21 @@ BLOCKING_RESERVATION_STATUSES = ("Tentative", "Reserved", "Checked In")
 # Booking statuses whose unassigned room lines consume room-type capacity.
 BLOCKING_BOOKING_STATUSES = ("Tentative", "Confirmed", "Checked In")
 
+# Kept for anything that imports them; occupancy no longer uses times at all.
 DEFAULT_ARRIVAL_TIME = "14:00:00"
 DEFAULT_DEPARTURE_TIME = "12:00:00"
 
 
 def _window(arrival_date, departure_date, arrival_time=None, departure_time=None):
-	"""The half-open datetime window a stay occupies."""
-	start = _make_datetime(arrival_date, arrival_time, DEFAULT_ARRIVAL_TIME)
-	end = _make_datetime(departure_date, departure_time, DEFAULT_DEPARTURE_TIME)
+	"""The nights a stay occupies, as (first night, departure date) — half-open.
+
+	Rooms are allocated by night: a stay from Saturday to Sunday holds only Saturday
+	night, so another guest can arrive on Sunday even if the first one has not been
+	checked out yet. Check-in and check-out times are the property's standard ones
+	(api.stay_policy) and play no part in whether two stays clash. The time
+	arguments are accepted for compatibility and ignored.
+	"""
+	start, end = getdate(arrival_date), getdate(departure_date)
 	if end <= start:
 		frappe.throw(_("Departure must be after arrival."))
 	return start, end
@@ -52,16 +62,15 @@ def _window(arrival_date, departure_date, arrival_time=None, departure_time=None
 
 def _overlapping_reservations(start, end, room=None, room_type=None, ignore_reservation=None,
                               ignore_booking=None):
-	"""Reservations that overlap the window. Overlap is `new_start < old_end AND
-	new_end > old_start`, evaluated on full datetimes rather than dates so a same-day
-	turnaround (12:00 out, 14:00 in) is not treated as a clash."""
+	"""Reservations that share at least one night with the window: `new_start < old_end
+	AND new_end > old_start` on dates. A stay whose departure has passed holds no future
+	night, so a guest nobody checked out never blocks the next arrival, and one guest
+	leaving on the day another arrives is never a clash."""
 	conditions = ["r.status IN %(statuses)s"]
 	params = {
 		"statuses": BLOCKING_RESERVATION_STATUSES,
 		"start": start,
 		"end": end,
-		"in_t": DEFAULT_ARRIVAL_TIME,
-		"out_t": DEFAULT_DEPARTURE_TIME,
 	}
 
 	if room:
@@ -78,12 +87,10 @@ def _overlapping_reservations(start, end, room=None, room_type=None, ignore_rese
 		params["ignore_booking"] = ignore_booking
 
 	conditions.append(
-		"""CAST(CONCAT(r.arrival_date, ' ',
-			IFNULL(NULLIF(r.arrival_time, ''), %(in_t)s)) AS DATETIME) < %(end)s"""
+		"r.arrival_date < %(end)s"
 	)
 	conditions.append(
-		"""CAST(CONCAT(r.departure_date, ' ',
-			IFNULL(NULLIF(r.departure_time, ''), %(out_t)s)) AS DATETIME) > %(start)s"""
+		"r.departure_date > %(start)s"
 	)
 
 	return frappe.db.sql(
@@ -91,6 +98,56 @@ def _overlapping_reservations(start, end, room=None, room_type=None, ignore_rese
 		SELECT r.name, r.room, r.room_type, r.guest, r.status,
 		       r.arrival_date, r.departure_date
 		FROM `tabHotel Reservation` r
+		WHERE {conditions}
+		""".format(conditions=" AND ".join(conditions)),
+		params,
+		as_dict=True,
+	)
+
+
+def _room_holds(start, end, room=None, room_type=None, ignore_booking=None):
+	"""Booking lines that name a room but have not become a reservation yet.
+
+	Shaped like `_overlapping_reservations` rows (with `booking` in place of a
+	reservation name) so callers can treat both the same way.
+	"""
+	if not frappe.db.exists("DocType", "Hotel Booking"):
+		return []
+
+	conditions = [
+		"b.status IN %(statuses)s",
+		"IFNULL(l.room, '') != ''",
+		"IFNULL(l.reservation, '') = ''",
+	]
+	params = {
+		"statuses": BLOCKING_BOOKING_STATUSES,
+		"start": start,
+		"end": end,
+	}
+	if room:
+		conditions.append("l.room = %(room)s")
+		params["room"] = room
+	if room_type:
+		conditions.append("l.room_type = %(room_type)s")
+		params["room_type"] = room_type
+	if ignore_booking:
+		conditions.append("b.name != %(ignore_booking)s")
+		params["ignore_booking"] = ignore_booking
+
+	conditions.append(
+		"b.arrival_date < %(end)s"
+	)
+	conditions.append(
+		"b.departure_date > %(start)s"
+	)
+
+	return frappe.db.sql(
+		"""
+		SELECT NULL AS name, l.room, l.room_type, b.guest, b.guest_name,
+		       CONCAT('Held (', b.status, ')') AS status, b.name AS booking,
+		       b.arrival_date, b.departure_date
+		FROM `tabHotel Booking Room` l
+		JOIN `tabHotel Booking` b ON b.name = l.parent
 		WHERE {conditions}
 		""".format(conditions=" AND ".join(conditions)),
 		params,
@@ -116,8 +173,6 @@ def _soft_holds(start, end, room_type=None, ignore_booking=None):
 		"statuses": BLOCKING_BOOKING_STATUSES,
 		"start": start,
 		"end": end,
-		"in_t": DEFAULT_ARRIVAL_TIME,
-		"out_t": DEFAULT_DEPARTURE_TIME,
 	}
 
 	if room_type:
@@ -128,12 +183,10 @@ def _soft_holds(start, end, room_type=None, ignore_booking=None):
 		params["ignore_booking"] = ignore_booking
 
 	conditions.append(
-		"""CAST(CONCAT(b.arrival_date, ' ',
-			IFNULL(NULLIF(b.arrival_time, ''), %(in_t)s)) AS DATETIME) < %(end)s"""
+		"b.arrival_date < %(end)s"
 	)
 	conditions.append(
-		"""CAST(CONCAT(b.departure_date, ' ',
-			IFNULL(NULLIF(b.departure_time, ''), %(out_t)s)) AS DATETIME) > %(start)s"""
+		"b.departure_date > %(start)s"
 	)
 
 	rows = frappe.db.sql(
@@ -187,6 +240,8 @@ def get_availability(arrival_date, departure_date, room_type=None, arrival_time=
 	):
 		if res.room:
 			taken[res.room] = res
+	for hold in _room_holds(start, end, room_type=room_type, ignore_booking=ignore_booking):
+		taken.setdefault(hold.room, hold)
 
 	holds = _soft_holds(start, end, room_type=room_type, ignore_booking=ignore_booking) \
 		if include_soft_holds else {}
@@ -233,7 +288,7 @@ def get_availability(arrival_date, departure_date, room_type=None, arrival_time=
 			bucket["out_of_order"] += 1
 		elif room.name in taken:
 			res = taken[room.name]
-			blocked_by = f"{res.status}: {res.name}"
+			blocked_by = f"{res.status}: {res.name or res.get('booking')}"
 			bucket["occupied"] += 1
 
 		detail.append({
@@ -315,8 +370,12 @@ def assign_rooms(room_type, qty, arrival_date, departure_date, arrival_time=None
 
 @frappe.whitelist()
 def is_room_free(room, arrival_date, departure_date, arrival_time=None, departure_time=None,
-                 ignore_reservation=None):
-	"""Non-throwing check for one room. Returns {"free": bool, "reason": str|None}."""
+                 ignore_reservation=None, ignore_booking=None):
+	"""Non-throwing check for one room. Returns {"free": bool, "reason": str|None}.
+
+	`ignore_booking` skips a booking's own room holds, so a booking (or a reservation
+	being created from it) does not clash with the hold it is itself converting.
+	"""
 	enabled, status = frappe.db.get_value("Hotel Room", room, ["is_enabled", "status"]) or (0, None)
 	if not enabled:
 		return {"free": False, "reason": _("Room {0} is disabled.").format(room)}
@@ -333,5 +392,15 @@ def is_room_free(room, arrival_date, departure_date, arrival_time=None, departur
 				room, c.status, c.guest, c.arrival_date, c.departure_date
 			),
 			"reservation": c.name,
+		}
+	holds = _room_holds(start, end, room=room, ignore_booking=ignore_booking)
+	if holds:
+		h = holds[0]
+		return {
+			"free": False,
+			"reason": _("Room {0} is held on booking {1} for {2} ({3} to {4}).").format(
+				room, h.booking, h.guest_name or h.guest, h.arrival_date, h.departure_date
+			),
+			"booking": h.booking,
 		}
 	return {"free": True, "reason": None}

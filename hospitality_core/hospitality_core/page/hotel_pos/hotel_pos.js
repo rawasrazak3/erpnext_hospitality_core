@@ -53,6 +53,50 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
    disables the overflow-y:auto on .cart-body inside it. */
 "#pos-cart-pane,#pos-arr-detail{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}",
 "#pos-cart-pane.pane-hidden,#pos-arr-detail.pane-hidden{display:none}",
+/* ---------------------------------------------------------------- guests board */
+"#pos-stay-detail{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}",
+"#pos-stay-detail.pane-hidden{display:none}",
+".hpos-stays{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}",
+".st-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--card);" +
+  "border-bottom:1px solid var(--line);flex:0 0 auto}",
+".st-bar input{flex:1 1 200px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:var(--border-radius,6px);" +
+  "font-size:var(--text-sm,12px);font-family:inherit;background:var(--control-bg,var(--card));color:var(--ink)}",
+".st-chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;background:var(--card);border-bottom:1px solid var(--line);flex:0 0 auto}",
+".st-chip{padding:4px 11px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--dim);" +
+  "font-size:var(--text-sm,12px);font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap}",
+".st-chip b{font-variant-numeric:tabular-nums;margin-left:3px}",
+".st-chip.active{background:var(--p);border-color:var(--p);color:#fff;font-weight:600}",
+"#pos-stay-list{flex:1 1 auto;min-height:0;overflow-y:auto;padding:8px 16px 16px}",
+".st-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px 12px;background:var(--card);" +
+  "border:1px solid var(--line);border-left:3px solid var(--line);border-radius:var(--r);margin-bottom:6px;cursor:pointer}",
+".st-row:hover{border-color:var(--p-line)}",
+".st-row.active{border-color:var(--p);box-shadow:inset 0 0 0 1px var(--p);background:var(--p-soft)}",
+".st-row.s-in{border-left-color:var(--bad)}.st-row.s-arr{border-left-color:var(--warn)}.st-row.s-up{border-left-color:var(--p-line)}",
+".st-name{font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+".st-meta{font-size:var(--text-xs,11px);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+".st-side{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px}",
+".st-stage{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:1px 7px;border-radius:4px;" +
+  "background:var(--sunken);color:var(--dim);white-space:nowrap}",
+".st-stage.g-due,.st-stage.g-over{background:var(--bad);color:#fff}",
+".st-stage.g-in{background:var(--bg-red,#fdecec);color:var(--bad)}",
+".st-stage.g-arr,.st-stage.g-late{background:var(--warn);color:#fff}",
+".st-stage.g-hold{background:var(--p-soft);color:var(--p-deep)}",
+".st-due{font-size:var(--text-xs,11px);font-weight:600;font-variant-numeric:tabular-nums;color:var(--bad)}",
+".st-due.zero{color:var(--ok)}",
+".sd-money{background:var(--sunken);border-radius:var(--r);padding:10px 12px;margin:10px 0}",
+".sd-money div{display:flex;justify-content:space-between;font-size:var(--text-sm,12px);padding:2px 0;font-variant-numeric:tabular-nums}",
+".sd-money .big{font-size:var(--text-lg,15px);font-weight:700;border-top:1px solid var(--line);margin-top:4px;padding-top:6px}",
+".sd-money .ok{color:var(--ok)}",
+".sd-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}",
+".sd-actions button{height:34px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:var(--border-radius,6px);" +
+  "font-size:var(--text-sm,12px);font-weight:600;cursor:pointer;font-family:inherit}",
+".sd-actions button:hover{border-color:var(--p);color:var(--p)}",
+".sd-actions button.danger{color:var(--bad)}",
+".sd-actions button.danger:hover{border-color:var(--bad)}",
+".sd-lines{margin-top:12px;font-size:var(--text-xs,11px)}",
+".sd-lines div{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px dashed var(--line)}",
+".sd-lines div span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}",
+".sd-lines .cr{color:var(--ok)}",
 
 /* ---------------------------------------------------------------- topbar */
 ".hpos-topbar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--card);" +
@@ -128,14 +172,32 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
   "border-radius:var(--r);padding:11px 12px;cursor:pointer;position:relative;display:flex;" +
   "flex-direction:column;gap:4px;transition:border-color .12s,box-shadow .12s,background .12s}",
 ".hpos-room > *{flex:0 0 auto;min-height:0}",
-".hpos-room:hover:not(.off):not(.occ){border-color:var(--p-line);box-shadow:0 2px 10px rgba(0,0,0,.07)}",
+".hpos-room:hover:not(.off){border-color:var(--p-line);box-shadow:0 2px 10px rgba(0,0,0,.07)}",
 ".hpos-room.sel{border-color:var(--p);border-left-color:var(--p);background:var(--p-soft);" +
   "box-shadow:inset 0 0 0 1px var(--p),0 2px 8px rgba(79,70,229,.18)}",
 ".hpos-room.sel .rm-type{color:var(--p-deep)}",
 ".hpos-room.sel::after{content:'\\2713';position:absolute;top:8px;right:9px;width:17px;height:17px;" +
   "background:var(--p);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;" +
   "font-size:11px;font-weight:700;box-shadow:0 1px 4px rgba(79,70,229,.5)}",
-".hpos-room.occ{opacity:.55;cursor:not-allowed;background:var(--sunken)}",
+/* Occupied (checked in) and Reserved (booked or held, not yet arrived) are different
+   jobs for the desk — check out vs check in — so they read differently. Both are
+   clickable: the card opens what can be done with that guest. */
+".hpos-room.occ{background:var(--sunken);border-left-color:var(--bad)}",
+".hpos-room.rsv{background:var(--bg-orange,#fff7ed);border-left-color:var(--warn);border-style:solid}",
+".hpos-room.occ .rm-rate,.hpos-room.rsv .rm-rate,.hpos-room.occ .rm-amen,.hpos-room.rsv .rm-amen{opacity:.55}",
+".hpos-room .rm-who{font-size:var(--text-xs,11px);font-weight:600;color:var(--ink);white-space:nowrap;" +
+  "overflow:hidden;text-overflow:ellipsis}",
+".hpos-room .rm-when{font-size:var(--text-xs,11px);color:var(--dim)}",
+".hpos-room .rm-flag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;" +
+  "letter-spacing:.03em;border-radius:4px;padding:0 5px;margin-right:4px}",
+".rm-flag.in{background:var(--bad);color:#fff}",
+".rm-flag.rs{background:var(--warn);color:#fff}",
+".hpos-tab .held{font-size:10px;margin-left:4px;opacity:.8}",
+".dot-rsv{background:var(--warn)}",
+".hpos-stat.stat-amber .num{color:var(--warn)}",
+".cart-check{display:flex;align-items:center;gap:8px;font-size:var(--text-sm,12px);font-weight:600;" +
+  "color:var(--ink);margin:6px 0 2px;cursor:pointer}",
+".cart-check input{width:16px;height:16px;margin:0}",
 ".hpos-room.off{opacity:.45;cursor:not-allowed;border-style:dashed}",
 ".hpos-room .rm-num{font-size:var(--text-base,13px);font-weight:600;color:var(--ink);line-height:1.25;" +
   "padding-right:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
@@ -178,6 +240,9 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 ".ci-rm:hover{border-color:var(--bad);background:var(--bg-red,#fce9e9)}",
 ".ci-warn{font-size:var(--text-xs,11px);color:var(--bad);margin-top:3px;font-weight:500}",
 ".ci-amen{font-size:var(--text-xs,11px);color:var(--dim);margin-top:2px}",
+/* Over capacity is a priced sale, not a fault — reads as information, not as an error. */
+".ci-info{font-size:var(--text-xs,11px);color:var(--warn);background:var(--bg-amber,#fff7ed);" +
+  "border-radius:4px;padding:5px 8px;margin-top:6px;font-weight:500}",
 ".cart-note{font-size:var(--text-xs,11px);color:var(--dim);padding-top:8px;" +
   "border-top:1px dashed var(--line);margin-top:8px}",
 /* Was a block icon followed by a bare text node, which collided at large font sizes. */
@@ -290,13 +355,23 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                  arrival: frappe.datetime.now_date(),
                  departure: frappe.datetime.add_days(frappe.datetime.now_date(),1),
                  arrival_time: '',
-                 departure_time: '12:00',
+                 departure_time: '',
                  nights:1, filter_type:'All', mode:'new', arrival_doc:null,
-                 adults:1, children:0 },
+                 adults:1, children:0,
+                 rate_override:0, discount_type:'', discount_value:0 },
 
         init: function(){
             this.bind();
             this.load();
+            // Payment modes come from the site, not a hard-coded list.
+            frappe.db.get_list('Mode of Payment', {filters:{enabled:1}, fields:['name'], limit: 50})
+                .then(function(rows){
+                    if(!rows || !rows.length) return;
+                    $('#pos-mop').html(rows.map(function(m){
+                        var n = frappe.utils.escape_html(m.name);
+                        return '<option'+(m.name==='Cash'?' selected':'')+'>'+n+'</option>';
+                    }).join(''));
+                });
         },
 
         bind: function(){
@@ -309,6 +384,15 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                 self.state.children = cint($('#pos-children').val());
                 self.render_cart();
             });
+            // An agreed rate or discount typed at the desk changes the total the guest
+            // is quoted, so recompute the cart as it is entered.
+            $('#pos-rate-override, #pos-discount-type, #pos-discount-value')
+                .on('input change', function(){
+                    self.state.rate_override = flt($('#pos-rate-override').val());
+                    self.state.discount_type = $('#pos-discount-type').val() || '';
+                    self.state.discount_value = flt($('#pos-discount-value').val());
+                    self.render_cart();
+                });
             $('#btn-new-guest').on('click', function(){
                 self.state.is_new_guest = !self.state.is_new_guest;
                 if(self.state.is_new_guest){
@@ -324,11 +408,17 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                 self.refresh_btn();
             });
             $('#btn-confirm').on('click', function(){ self.book(); });
+            $('#pos-checkin-now').on('change', function(){ self.refresh_btn(); });
             $('#new-guest-form').on('input','input', function(){ self.refresh_btn(); });
 
             $('.hpos-mode').on('click', function(){ self.set_mode($(this).data('mode')); });
             $('#pos-arr-refresh').on('click', function(){ self.load_arrivals(); });
             $('#pos-arr-q').on('keydown', function(e){ if(e.key === 'Enter'){ self.load_arrivals(); } });
+            $('#pos-stay-q').on('input', frappe.utils.debounce(function(){ self.load_stays(); }, 250));
+            $('#pos-stay-chips').on('click', '.st-chip', function(){
+                self.state.stay_view = $(this).data('view');
+                self.load_stays();
+            });
         },
 
         // --- Arrivals -------------------------------------------------------
@@ -341,12 +431,17 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
             $('.hpos-mode[data-mode="'+mode+'"]').addClass('active');
 
             var arrivals = mode === 'arrivals';
+            var stays = mode === 'stays';
             $('#pos-arrivals').toggle(arrivals);
+            $('#pos-stays').toggle(stays);
             $('#pos-arr-detail').toggleClass('pane-hidden', !arrivals);
-            $('#pos-grid, #pos-type-tabs, .hpos-filters, .hpos-stats').toggle(!arrivals);
-            $('#pos-cart-pane').toggleClass('pane-hidden', arrivals);
+            $('#pos-stay-detail').toggleClass('pane-hidden', !stays);
+            $('#pos-grid, #pos-type-tabs, .hpos-filters, .hpos-stats').toggle(mode === 'new');
+            $('#pos-cart-pane').toggleClass('pane-hidden', mode !== 'new');
 
             if(arrivals){ this.load_arrivals(); }
+            if(stays){ this.load_stays(); }
+            if(mode === 'new'){ this.load(); }
         },
 
         load_arrivals: function(){
@@ -508,8 +603,9 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
         on_search: function(){
             this.state.arrival = $('#pos-arr').val();
             this.state.departure = $('#pos-dep').val();
-            this.state.arrival_time = $('#pos-arr-time').val();
-            this.state.departure_time = $('#pos-dep-time').val();
+            // Times are the property's standard check-in/check-out (settings), not typed.
+            this.state.arrival_time = '';
+            this.state.departure_time = '';
             this.state.adults = cint($('#pos-adults').val());
             this.state.children = cint($('#pos-children').val());
             this.state.nights = frappe.datetime.get_diff(this.state.departure, this.state.arrival);
@@ -527,12 +623,15 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                     arrival: self.state.arrival,
                     departure: self.state.departure,
                     arrival_time: self.state.arrival_time || '',
-                    departure_time: self.state.departure_time || '12:00'
+                    departure_time: self.state.departure_time || ''
                 },
                 callback: function(r){
                     if(r.message){
                         self.state.rooms = r.message.rooms || [];
                         self.state.room_types = r.message.room_types || [];
+                        self.state.held = r.message.held || {};
+                        var t = frappe.hospitality.stay.fmt_time;
+                        $('#pos-stay-times').text(__('Check-in {0} · Check-out {1}', [t(r.message.check_in_time), t(r.message.check_out_time)]));
                         self.render_tabs();
                         self.render_grid();
                         self.render_stats();
@@ -545,10 +644,13 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
         render_stats: function(){
             var avail = this.state.rooms.filter(function(r){return r.status==='Available'}).length;
             var occ = this.state.rooms.filter(function(r){return r.status==='Occupied'}).length;
+            var rsv = this.state.rooms.filter(function(r){return r.status==='Reserved'}).length;
             var total = this.state.rooms.length;
-            var pct = total ? Math.round(occ/total*100) : 0;
+            // Occupancy for the window counts rooms sold, arrived or not.
+            var pct = total ? Math.round((occ + rsv)/total*100) : 0;
             $('#stat-avail').text(avail);
             $('#stat-occ').text(occ);
+            $('#stat-rsv').text(rsv);
             $('#stat-pct').text(pct + '%');
             $('#stat-sel').text(this.state.cart.length);
             $('#cart-nights').text(this.state.nights);
@@ -560,7 +662,11 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
             $tabs.empty();
             $tabs.append('<button class="hpos-tab'+(self.state.filter_type==='All'?' active':'')+'" data-type="All">All Rooms</button>');
             self.state.room_types.forEach(function(rt){
-                $tabs.append('<button class="hpos-tab'+(self.state.filter_type===rt.name?' active':'')+'" data-type="'+rt.name+'">'+rt.name+'</button>');
+                // Rooms of this type promised on a booking that has no room number yet.
+                var held = (self.state.held || {})[rt.name];
+                var badge = held ? '<span class="held" title="'+__('Held on bookings without a room number')+'">('+held+' '+__('held')+')</span>' : '';
+                $tabs.append('<button class="hpos-tab'+(self.state.filter_type===rt.name?' active':'')+'" data-type="'+
+                    frappe.utils.escape_html(rt.name)+'">'+frappe.utils.escape_html(rt.name)+badge+'</button>');
             });
             $tabs.off('click','.hpos-tab').on('click','.hpos-tab', function(){
                 self.state.filter_type = $(this).data('type');
@@ -587,6 +693,7 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                 var cls = 'hpos-room';
                 var dot = 'dot-avail';
                 if(room.status==='Occupied'){ cls+=' occ'; dot='dot-occ'; }
+                else if(room.status==='Reserved'){ cls+=' rsv'; dot='dot-rsv'; }
                 else if(room.status==='Maintenance'){ cls+=' off'; dot='dot-maint'; }
                 if(is_sel) cls+=' sel';
 
@@ -622,13 +729,26 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                     }
                 }
                 var wknd = room.has_weekend_premium
-                    ? '<span class="rm-wknd" title="'+__('Charged on Saturday, Sunday and holiday nights')+'">'+
+                    ? '<span class="rm-wknd" title="'+__('Charged on Friday, Saturday, Sunday and holiday nights')+'">'+
                       __('Weekend/Holiday')+' '+format_currency(room.weekend_rate,currency)+'</span>'
                     : '';
 
-                var $card = $('<div class="'+cls+'">'+
+                // Who is in the room, or booked into it, for these dates.
+                var who = '';
+                var o = room.occupant;
+                if(o){
+                    var flag = room.status==='Occupied'
+                        ? '<span class="rm-flag in">'+__('In house')+'</span>'
+                        : '<span class="rm-flag rs">'+(o.arrives_today ? __('Arriving') : __('Reserved'))+'</span>';
+                    who = '<div class="rm-who">'+flag+frappe.utils.escape_html(o.guest_name || '')+'</div>'+
+                          '<div class="rm-when">'+frappe.datetime.str_to_user(o.arrival_date)+' → '+
+                          frappe.datetime.str_to_user(o.departure_date)+'</div>';
+                }
+
+                var $card = $('<div class="'+cls+'" title="'+(o ? frappe.utils.escape_html(o.status+' — '+(o.guest_name||'')) : '')+'">'+
                     '<div class="rm-num">'+frappe.utils.escape_html(room.name)+'</div>'+
                     '<div class="rm-type">'+frappe.utils.escape_html(room.room_type)+'</div>'+
+                    who+
                     (meta ? '<div class="rm-meta">'+meta+'</div>' : '')+
                     '<div class="rm-rate">'+format_currency(room.rate,currency)+' <span>/night</span>'+wknd+stay+'</div>'+
                     (amen ? '<div class="rm-amen">'+amen+'</div>' : '')+
@@ -636,9 +756,262 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                 '</div>');
                 if(room.status==='Available'){
                     $card.on('click', function(){ self.toggle(room); });
+                } else if(room.occupant){
+                    // A booked or occupied room opens that guest on the Guests tab,
+                    // where every action for the stay lives.
+                    $card.on('click', function(){
+                        var o = room.occupant;
+                        self.open_stay(o.reservation ? 'reservation' : 'booking', o.reservation || o.booking);
+                    });
                 }
                 $grid.append($card);
             });
+        },
+
+        // ---- Guests board ------------------------------------------------
+        // Every stay in one list; picking one shows its money and every action.
+        load_stays: function(){
+            var self = this;
+            var view = self.state.stay_view || 'live';
+            frappe.call({
+                method:'hospitality_core.hospitality_core.api.front_desk.get_stays',
+                args:{ view: view, search: $('#pos-stay-q').val() || '' },
+                callback: function(r){ if(r.message){ self.render_stays(r.message); } }
+            });
+        },
+
+        render_stays: function(data){
+            var self = this;
+            var view = self.state.stay_view || 'live';
+            var chips = [
+                ['live', __('Today')], ['arriving', __('Arriving')], ['inhouse', __('In house')],
+                ['dueout', __('Due out / pending')], ['upcoming', __('Upcoming')], ['holds', __('Holds')],
+                ['noshow', __('No show')], ['all', __('All')]
+            ];
+            $('#pos-stay-chips').html(chips.map(function(c){
+                var n = (data.counts || {})[c[0]] || 0;
+                return '<button class="st-chip'+(c[0]===view?' active':'')+'" data-view="'+c[0]+'">'+c[1]+'<b>'+n+'</b></button>';
+            }).join(''));
+            $('#pos-stay-count').text((data.counts || {}).live ? '('+data.counts.live+')' : '');
+
+            var cls = { 'In house':'s-in', 'Due out':'s-in', 'Check-out pending':'s-in', 'Arriving':'s-arr',
+                        'Late arrival':'s-arr', 'Upcoming':'s-up', 'Hold':'s-up' };
+            var tag = { 'Due out':'g-due', 'Check-out pending':'g-over', 'In house':'g-in', 'Arriving':'g-arr',
+                        'Late arrival':'g-late', 'Hold':'g-hold' };
+            var rows = data.rows || [];
+            if(!rows.length){
+                $('#pos-stay-list').html('<div class="cart-empty"><div class="icon">🛏</div>'+__('No guests here')+'</div>');
+                return;
+            }
+            $('#pos-stay-list').html(rows.map(function(o){
+                var key = o.kind+':'+o.name;
+                var due = flt(o.due);
+                return '<div class="st-row '+(cls[o.stage]||'')+(self.state.stay_key===key?' active':'')+'" data-kind="'+o.kind+'" data-name="'+
+                        frappe.utils.escape_html(o.name)+'">'+
+                    '<div style="min-width:0"><div class="st-name">'+frappe.utils.escape_html(o.guest_name || o.name)+'</div>'+
+                    '<div class="st-meta">'+frappe.utils.escape_html(o.room || '')+(o.room_type ? ' · '+frappe.utils.escape_html(o.room_type) : '')+
+                        (o.company ? ' · '+frappe.utils.escape_html(o.company) : '')+'</div>'+
+                    '<div class="st-meta">'+frappe.datetime.str_to_user(o.arrival_date)+' → '+frappe.datetime.str_to_user(o.departure_date)+
+                        ' · '+o.nights+' '+__('night(s)')+(o.mobile_no ? ' · '+frappe.utils.escape_html(o.mobile_no) : '')+'</div></div>'+
+                    '<div class="st-side"><span class="st-stage '+(tag[o.stage]||'')+'">'+__(o.stage)+'</span>'+
+                    '<span class="st-due'+(due>0.01?'':' zero')+'">'+(due>0.01 ? __('Due')+' '+format_currency(due) : (due < -0.01 ? __('Credit')+' '+format_currency(-due) : __('Settled')))+'</span></div>'+
+                '</div>';
+            }).join(''));
+            $('#pos-stay-list .st-row').on('click', function(){
+                self.open_stay($(this).data('kind'), $(this).data('name'));
+            });
+        },
+
+        open_stay: function(kind, name){
+            var self = this;
+            if(self.state.mode !== 'stays'){ self.set_mode('stays'); }
+            self.state.stay_key = kind+':'+name;
+            $('#pos-stay-list .st-row').removeClass('active');
+            $('#pos-stay-list .st-row[data-name="'+name+'"]').addClass('active');
+            $('#pos-stay-detail').html('<div class="cart-empty"><div class="icon">⏳</div>'+__('Loading...')+'</div>');
+            var refresh = function(){ self.open_stay(kind, name); self.load_stays(); };
+            if(kind === 'booking'){
+                frappe.call({
+                    method:'hospitality_core.hospitality_core.page.hotel_crm.hotel_crm.get_booking',
+                    args:{ booking: name },
+                    callback: function(r){ if(r.message){ self.render_booking_detail(r.message, refresh); } }
+                });
+            } else {
+                frappe.call({
+                    method:'hospitality_core.hospitality_core.api.front_desk.get_stay_summary',
+                    args:{ reservation: name },
+                    callback: function(r){ if(r.message){ self.render_stay_detail(r.message, refresh); } }
+                });
+            }
+        },
+
+        _detail_shell: function(title, sub, stage, body, primary, actions){
+            var html = '<div class="cart-hdr"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'+
+                    '<div style="min-width:0"><h3>'+frappe.utils.escape_html(title)+'</h3><div class="nights">'+sub+'</div></div>'+
+                    '<span class="st-stage">'+frappe.utils.escape_html(stage)+'</span></div></div>'+
+                '<div class="cart-body">'+body+'<div class="sd-actions" id="sd-actions"></div><div id="sd-lines"></div></div>'+
+                '<div class="cart-footer" id="sd-primary"></div>';
+            $('#pos-stay-detail').html(html);
+            if(primary){
+                var $p = $('<button class="btn-book">'+primary.label+'</button>').on('click', primary.fn);
+                $('#sd-primary').append($p);
+            } else {
+                $('#sd-primary').remove();
+            }
+            actions.forEach(function(a){
+                if(!a) return;
+                $('#sd-actions').append($('<button'+(a.danger?' class="danger"':'')+'>'+a.label+'</button>').on('click', a.fn));
+            });
+        },
+
+        render_stay_detail: function(s, refresh){
+            var stay = frappe.hospitality.stay;
+            var g = s.guest_detail || {};
+            var f = s.folio || {};
+            var fmt = function(v){ return format_currency(flt(v)); };
+            var today = frappe.datetime.now_date();
+            var in_house = s.status === 'Checked In';
+            var reserved = s.status === 'Reserved' || s.status === 'No Show';
+            var credit = -flt(s.balance) > 0.01 && !flt(s.unapplied_advance) ? -flt(s.balance) : 0;
+
+            var money;
+            if(reserved){
+                var b = s.booking || {};
+                money = '<div><span>'+__('Stay total (estimate)')+'</span><span>'+fmt(s.stay_estimate_total)+'</span></div>'+
+                    '<div class="ok"><span>'+__('Advance paid')+'</span><span>'+fmt(s.unapplied_advance)+'</span></div>'+
+                    '<div class="big"><span>'+__('To pay')+'</span><span>'+fmt(Math.max(s.stay_estimate_total - flt(s.unapplied_advance), 0))+'</span></div>';
+            } else {
+                money = '<div><span>'+__('Charges')+'</span><span>'+fmt(f.total_charges)+'</span></div>'+
+                    (flt(f.total_discounts) ? '<div class="ok"><span>'+__('Discounts')+'</span><span>−'+fmt(f.total_discounts)+'</span></div>' : '')+
+                    '<div class="ok"><span>'+__('Paid')+'</span><span>−'+fmt(f.total_payments)+'</span></div>'+
+                    (flt(s.unapplied_advance) ? '<div class="ok"><span>'+__('Advance waiting')+'</span><span>−'+fmt(s.unapplied_advance)+'</span></div>' : '')+
+                    '<div class="big"><span>'+(credit ? __('Credit') : __('Balance'))+'</span><span>'+fmt(credit || s.to_collect)+'</span></div>'+
+                    (in_house && s.pending_total ? '<div><span>'+__('Nights still to post')+'</span><span>'+fmt(s.pending_total)+'</span></div>' : '');
+            }
+            var body = '<div class="arr-meta" style="white-space:normal">'+
+                    frappe.utils.escape_html(g.mobile_no || '')+(s.company ? ' · '+__('Billed to {0}', [frappe.utils.escape_html(s.company)]) : '')+'</div>'+
+                '<div style="margin-top:6px;font-weight:600">'+frappe.utils.escape_html(s.room)+' · '+frappe.utils.escape_html(s.room_type || '')+'</div>'+
+                '<div class="arr-meta">'+frappe.datetime.str_to_user(s.arrival_date)+' → '+frappe.datetime.str_to_user(s.departure_date)+
+                    ' · '+s.nights+' '+__('night(s)')+' · '+cint(s.adults)+' '+__('adult(s)')+(cint(s.children) ? ', '+cint(s.children)+' '+__('child(ren)') : '')+'</div>'+
+                '<div class="sd-money">'+money+'</div>';
+
+            var primary = null;
+            if(s.status === 'Checked In'){
+                primary = { label: __('Check Out'), fn: function(){ stay.check_out(s.reservation, {on_done: refresh}); } };
+            } else if(reserved && s.arrival_date <= today){
+                primary = { label: __('Check In'), fn: function(){
+                    if(s.status === 'No Show'){
+                        frappe.call({ method:'hospitality_core.hospitality_core.page.hotel_pos.hotel_pos.checkin_arrival',
+                            args: s.booking && s.booking.name ? { booking: s.booking.name } : { reservation: s.reservation },
+                            freeze:true }).then(function(){ frappe.show_alert({message:__('Checked in'), indicator:'green'}); refresh(); });
+                    } else {
+                        stay.check_in(s.reservation, {on_done: refresh});
+                    }
+                } };
+            }
+
+            var due = in_house ? s.to_collect : Math.max(s.stay_estimate_total - flt(s.unapplied_advance), 0);
+            var actions = [
+                (in_house || reserved) ? { label: __('Take Payment'), fn: function(){ stay.take_payment(s.reservation, {due: due, on_done: refresh}); } } : null,
+                (in_house || reserved) ? { label: in_house ? __('Extend / Dates') : __('Change Dates'), fn: function(){ stay.change_dates(s.reservation, {extend: in_house, on_done: refresh}); } } : null,
+                in_house ? { label: __('Add Charge'), fn: function(){ stay.add_charge(s.reservation, {on_done: refresh}); } } : null,
+                (in_house || s.status === 'Reserved') ? { label: __('Move Room'), fn: function(){ stay.move_room(s.reservation, {on_done: refresh}); } } : null,
+                f.name ? { label: __('Print Bill'), fn: function(){ stay.print_bill(f.name); } } : null,
+                credit ? { label: __('Refund {0}', [fmt(credit)]), fn: function(){ stay.refund(s.reservation, {credit: credit, on_done: refresh}); } } : null,
+                (s.invoices || []).length ? { label: __('Invoice'), fn: function(){ frappe.set_route('Form', 'Sales Invoice', s.invoices[0].name); } } : null,
+                { label: __('Open Reservation'), fn: function(){ frappe.set_route('Form', 'Hotel Reservation', s.reservation); } },
+                (s.booking && s.booking.name) ? { label: __('Open Booking'), fn: function(){ frappe.set_route('Form', 'Hotel Booking', s.booking.name); } } : null,
+                reserved ? { label: __('Cancel Stay'), danger: true, fn: function(){ stay.cancel(s.reservation, {on_done: refresh}); } } : null,
+            ];
+            this._detail_shell(g.full_name || s.guest, frappe.utils.escape_html(s.reservation), __(s.status), body, primary, actions);
+
+            var lines = (s.lines || []).slice(-8);
+            if(lines.length){
+                $('#sd-lines').html('<div class="cart-sec" style="margin-top:12px">'+__('Latest on the bill')+'</div><div class="sd-lines">'+
+                    lines.map(function(l){
+                        var cr = l.kind !== 'charge';
+                        return '<div><span>'+frappe.datetime.str_to_user(l.posting_date)+' · '+frappe.utils.escape_html(l.description || l.item)+'</span>'+
+                            '<span class="'+(cr?'cr':'')+'">'+(cr ? '−'+fmt(Math.abs(l.amount)) : fmt(l.amount))+'</span></div>';
+                    }).join('')+'</div>');
+            }
+        },
+
+        render_booking_detail: function(b, refresh){
+            var stay = frappe.hospitality.stay;
+            var fmt = function(v){ return format_currency(flt(v)); };
+            var M = 'hospitality_core.hospitality_core.doctype.hotel_booking.hotel_booking.';
+            var rooms = (b.rooms || []).map(function(l){
+                return frappe.utils.escape_html(l.room || l.room_type)+(l.room ? '' : ' ('+__('any')+')');
+            }).join(', ');
+            var body = '<div class="arr-meta">'+frappe.utils.escape_html(b.mobile_no || '')+'</div>'+
+                '<div style="margin-top:6px;font-weight:600">'+rooms+'</div>'+
+                '<div class="arr-meta">'+frappe.datetime.str_to_user(b.arrival_date)+' → '+frappe.datetime.str_to_user(b.departure_date)+
+                    ' · '+b.nights+' '+__('night(s)')+(b.hold_expiry ? ' · '+__('hold until {0}', [frappe.datetime.str_to_user(b.hold_expiry)]) : '')+'</div>'+
+                '<div class="sd-money"><div><span>'+__('Total')+'</span><span>'+fmt(b.total_amount)+'</span></div>'+
+                    '<div class="ok"><span>'+__('Advance')+'</span><span>−'+fmt(b.advance_received)+'</span></div>'+
+                    '<div class="big"><span>'+__('Balance due')+'</span><span>'+fmt(b.balance_due)+'</span></div></div>';
+            var arrived = b.arrival_date <= frappe.datetime.now_date();
+            var primary = arrived
+                ? { label: __('Confirm & Check In'), fn: function(){
+                        frappe.call({ method:'hospitality_core.hospitality_core.page.hotel_pos.hotel_pos.checkin_arrival',
+                            args:{ booking: b.name }, freeze:true }).then(function(r){
+                                if(r.message){ frappe.show_alert({message:__('Checked in'), indicator:'green'}); refresh(); } });
+                    } }
+                : { label: __('Confirm Booking'), fn: function(){
+                        frappe.call({ method: M+'confirm_booking', args:{ booking: b.name }, freeze:true }).then(function(){
+                            frappe.show_alert({message:__('Booking confirmed'), indicator:'green'}); refresh(); });
+                    } };
+            var actions = [
+                { label: __('Take Advance'), fn: function(){ stay.take_payment({booking: b.name}, {due: b.balance_due, on_done: refresh}); } },
+                { label: __('Change Dates'), fn: function(){ stay.change_booking_dates(b.name, {on_done: refresh}); } },
+                { label: __('Open Booking'), fn: function(){ frappe.set_route('Form', 'Hotel Booking', b.name); } },
+                { label: __('Cancel Hold'), danger: true, fn: function(){
+                    frappe.prompt({ fieldtype:'Small Text', fieldname:'reason', label:__('Reason'), reqd:1 }, function(v){
+                        frappe.call({ method: M+'cancel_booking', args:{ booking: b.name, reason: v.reason }, freeze:true })
+                            .then(function(){ frappe.show_alert({message:__('Hold released'), indicator:'orange'}); refresh(); });
+                    }, __('Cancel Hold'), __('Cancel Hold'));
+                } },
+            ];
+            this._detail_shell(b.guest_name || b.guest, frappe.utils.escape_html(b.name), __(b.status), body, primary, actions);
+        },
+
+        // A booked or occupied card opens what the desk can do with that guest.
+        room_actions: function(room){
+            var self = this;
+            var o = room.occupant || {};
+            var stay = frappe.hospitality.stay;
+            var reload = function(){ self.load(); };
+            var html = '<div class="hfd-head"><div><div class="hfd-guest">'+frappe.utils.escape_html(o.guest_name || '')+'</div>'+
+                '<div class="hfd-sub">'+frappe.utils.escape_html(o.mobile_no || '')+'</div></div>'+
+                '<div class="hfd-room"><div class="hfd-room-no">'+frappe.utils.escape_html(room.name)+'</div>'+
+                '<div class="hfd-sub">'+frappe.utils.escape_html(room.room_type)+'</div></div></div>'+
+                '<div class="hfd-stay"><span>'+frappe.datetime.str_to_user(o.arrival_date)+' → '+
+                frappe.datetime.str_to_user(o.departure_date)+'</span><span>'+frappe.utils.escape_html(o.status || '')+'</span>'+
+                (o.booking ? '<span>'+frappe.utils.escape_html(o.booking)+'</span>' : '')+'</div>';
+
+            var d = new frappe.ui.Dialog({ title: room.name, fields: [{fieldtype:'HTML', options: html}] });
+            var add = function(label, fn, primary){
+                var $b = $('<button class="btn btn-sm '+(primary?'btn-primary':'btn-default')+'" style="margin:4px 6px 0 0">'+label+'</button>');
+                $b.on('click', function(){ d.hide(); fn(); });
+                d.$body.append($b);
+            };
+            if(o.status === 'Checked In' && o.reservation){
+                add(__('Check Out'), function(){ stay.check_out(o.reservation, {on_done: reload}); }, true);
+                add(__('Extend Stay'), function(){ stay.extend(o.reservation, {on_done: reload}); });
+            } else if(o.status === 'Reserved' && o.reservation && o.arrives_today){
+                add(__('Check In'), function(){ stay.check_in(o.reservation, {on_done: reload}); }, true);
+            } else if(o.booking && o.arrives_today){
+                // A hold on a Tentative booking: confirming and checking in happen together.
+                add(__('Check In'), function(){
+                    frappe.call({
+                        method:'hospitality_core.hospitality_core.page.hotel_pos.hotel_pos.checkin_arrival',
+                        args:{ booking: o.booking }, freeze:true
+                    }).then(function(r){ if(r.message){ frappe.show_alert({message:__('Checked in'), indicator:'green'}); reload(); } });
+                }, true);
+            }
+            if(o.booking){ add(__('Open Booking'), function(){ frappe.set_route('Form','Hotel Booking', o.booking); }); }
+            if(o.reservation){ add(__('Open Reservation'), function(){ frappe.set_route('Form','Hotel Reservation', o.reservation); }); }
+            d.show();
         },
 
         toggle: function(room){
@@ -664,15 +1037,22 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
             } else {
                 var has_weekend = false;
                 var capacity = 0;
+                var override = flt(self.state.rate_override);
                 self.state.cart.forEach(function(room){
                     // stay_total is priced night by night on the server, so a stay
                     // spanning a weekend is charged correctly instead of rate x nights.
-                    var rt = room.stay_total || (room.rate * self.state.nights);
+                    // An agreed rate replaces the tariff for every night.
+                    var rt = override
+                        ? override * self.state.nights
+                        : (room.stay_total || (room.rate * self.state.nights));
                     total += rt;
                     capacity += (room.max_occupancy || 0);
 
                     var sub = frappe.utils.escape_html(room.room_type);
-                    if(room.stay_total && Math.abs(room.stay_total - room.rate*self.state.nights) > 0.5){
+                    if(override){
+                        sub += ' &middot; '+format_currency(override,currency)+' '+__('agreed')+
+                               ' &times; '+self.state.nights+' '+__('nights');
+                    } else if(room.stay_total && Math.abs(room.stay_total - room.rate*self.state.nights) > 0.5){
                         has_weekend = true;
                         sub += ' &middot; '+format_currency(room.average_nightly,currency)+
                                ' '+__('avg')+' &times; '+self.state.nights+' '+__('nights');
@@ -699,17 +1079,41 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                     );
                 });
 
-                // Warn the moment the party no longer fits what is in the cart.
+                // Over capacity is sold with extra beds rather than refused, so show
+                // what that adds instead of warning the desk off the sale.
                 var guests = cint(self.state.adults) + cint(self.state.children);
                 if(guests && capacity && guests > capacity){
-                    $list.append('<div class="ci-warn">\u26A0 '+
-                        __('{0} guests exceed the {1} these rooms allow. Add a room or an extra bed.',
-                           [guests, capacity])+'</div>');
+                    var over = guests - capacity;
+                    var bed_cost = self.state.cart.reduce(function(acc, r){
+                        return Math.max(acc, flt(r.extra_bed_adult_rate));
+                    }, 0) * over * self.state.nights;
+                    $list.append('<div class="ci-info">\uD83D\uDECF '+
+                        __('{0} guest(s) over capacity — {1} extra bed(s) will be added, about {2}.',
+                           [over, over, format_currency(bed_cost, currency)])+'</div>');
+                    total += bed_cost;
                 }
-                if(has_weekend){
+                if(has_weekend && !override){
                     $list.append('<div class="cart-note">'+
-                        __('Totals include the weekend tariff for Saturday, Sunday and holiday nights.')+
+                        __('Totals include the weekend tariff for Friday, Saturday, Sunday and holiday nights.')+
                         '</div>');
+                }
+                if(override){
+                    $list.append('<div class="cart-note">'+
+                        __('An agreed rate of {0} replaces the tariff for every night.',
+                           [format_currency(override, currency)])+'</div>');
+                }
+
+                // The discount comes off the gross, exactly as the folio will post it.
+                var dtype = self.state.discount_type;
+                var dvalue = flt(self.state.discount_value);
+                if(dtype && dvalue > 0){
+                    var disc = dtype === 'Percentage'
+                        ? total * (Math.min(dvalue, 100) / 100)
+                        : Math.min(dvalue, total);
+                    disc = Math.max(Math.min(disc, total), 0);
+                    total -= disc;
+                    $list.append('<div class="cart-note">'+
+                        __('Discount applied: {0}', [format_currency(disc, currency)])+'</div>');
                 }
                 $list.off('click','.ci-rm').on('click','.ci-rm',function(){
                     var rn = $(this).data('room');
@@ -717,7 +1121,23 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                     if(rm) self.toggle(rm);
                 });
             }
+            // Selling past rooms of a type already promised on bookings oversells it.
+            var picked = {};
+            self.state.cart.forEach(function(r){ picked[r.room_type] = (picked[r.room_type]||0) + 1; });
+            Object.keys(picked).forEach(function(t){
+                var held = (self.state.held || {})[t] || 0;
+                if(!held) return;
+                var free = self.state.rooms.filter(function(r){ return r.room_type===t && r.status==='Available'; }).length;
+                if(picked[t] > free - held){
+                    $list.append('<div class="ci-warn">'+__('{0}: {1} room(s) of this type are promised on bookings without a room number. Selling this leaves them short.', [frappe.utils.escape_html(t), held])+'</div>');
+                }
+            });
+
             $('#cart-total-val').text(format_currency(total, currency));
+            self.state.cart_total = total;
+            var arriving_today = self.state.arrival === frappe.datetime.now_date();
+            $('#pos-checkin-wrap').toggle(arriving_today);
+            if(!arriving_today){ $('#pos-checkin-now').prop('checked', false); }
             self.refresh_btn();
         },
 
@@ -728,7 +1148,17 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
             } else {
                 if(!this.state.selected_guest) ok = false;
             }
-            $('#btn-confirm').prop('disabled',!ok);
+            $('#btn-confirm').prop('disabled',!ok)
+                .text($('#pos-checkin-now').is(':checked') ? __('Book & Check In') : __('Confirm Booking'));
+        },
+
+        reset_cart: function(){
+            this.state.cart = [];
+            $('#pos-advance, #pos-ref, #pos-remarks, #pos-rate-override').val('');
+            $('#pos-discount-type').val(''); $('#pos-discount-value').val(0);
+            $('#pos-checkin-now').prop('checked', false);
+            $('#new-guest-form input').val('');
+            this.render_cart();
         },
 
         book: function(){
@@ -755,8 +1185,16 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                 departure_time: self.state.departure_time || '',
                 adults: $('#pos-adults').val() || 1,
                 children: $('#pos-children').val() || 0,
+                rate_override: flt($('#pos-rate-override').val()),
+                discount_type: $('#pos-discount-type').val() || '',
+                discount_value: flt($('#pos-discount-value').val()),
+                remarks: $('#pos-remarks').val() || '',
                 rooms: self.state.cart.map(function(c){return c.name}),
-                is_new_guest: self.state.is_new_guest
+                is_new_guest: self.state.is_new_guest,
+                advance_amount: flt($('#pos-advance').val()),
+                mode_of_payment: $('#pos-mop').val() || 'Cash',
+                reference_no: $('#pos-ref').val() || '',
+                check_in_now: $('#pos-checkin-now').is(':checked') ? 1 : 0
             };
             if(self.state.is_new_guest){
                 payload.guest_details = {
@@ -778,23 +1216,43 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                 method:'hospitality_core.hospitality_core.page.hotel_pos.hotel_pos.submit_pos_booking',
                 args:{ payload: JSON.stringify(payload) },
                 callback: function(r){
-                    $('#btn-confirm').text('Confirm Booking');
                     if(!r.exc && r.message && r.message.success){
-                        frappe.show_alert({message:'Booking confirmed!',indicator:'green'}, 5);
-                        if(r.message.reservations.length===1)
-                            frappe.set_route('Form','Hotel Reservation',r.message.reservations[0]);
-                        else
-                            frappe.set_route('List','Hotel Reservation');
+                        var m = r.message;
+                        if((m.checked_in || []).length){
+                            // Walk-in: they are in the room now. Stay on the POS, ready
+                            // for the next guest, with the grid showing the room In House.
+                            frappe.show_alert({message: __('{0} checked in · booking {1}', [m.checked_in.length+' '+__('room(s)'), m.booking]), indicator:'green'}, 7);
+                            self.reset_cart();
+                            self.load();
+                        } else {
+                            frappe.show_alert({message: __('Booking {0} confirmed', [m.booking]), indicator:'green'}, 5);
+                            frappe.set_route('Form','Hotel Booking', m.booking);
+                        }
                     } else {
                         self.refresh_btn();
                     }
-                }
+                },
+                error: function(){ self.refresh_btn(); }
             });
         }
     };
 
     window.pos_app = POS;
     POS.init();
+    POS.apply_route_options = function(){
+        var o = frappe.route_options || {};
+        frappe.route_options = null;
+        if(o.reservation){ POS.open_stay('reservation', o.reservation); }
+        else if(o.booking){ POS.open_stay('booking', o.booking); }
+        else if(o.mode){ POS.set_mode(o.mode); }
+    };
+    POS.apply_route_options();
+};
+
+frappe.pages['hotel-pos'].on_page_show = function(){
+    if(window.pos_app && window.pos_app.apply_route_options && frappe.route_options){
+        window.pos_app.apply_route_options();
+    }
 };
 
 var RT_HUES = 8;
@@ -824,21 +1282,23 @@ function build_layout(){
           '<div><h2>Hotel POS</h2><p class="subtitle">Quick Reservation &amp; Guest Registration</p></div>'+
           '<div class="hpos-modes">'+
             '<button class="hpos-mode active" data-mode="new">New Booking</button>'+
-            '<button class="hpos-mode" data-mode="arrivals">Arrivals <span id="pos-arr-count"></span></button>'+
+            '<button class="hpos-mode" data-mode="stays">'+__('Guests')+' <span id="pos-stay-count"></span></button>'+
+            '<button class="hpos-mode" data-mode="arrivals">Group Arrivals <span id="pos-arr-count"></span></button>'+
           '</div>'+
         '</div>'+
         '<div class="hpos-filters">'+
           '<div class="hpos-fg"><label>Check-in</label><input type="date" id="pos-arr" value="'+today+'"></div>'+
-          '<div class="hpos-fg"><label>Check-in Time</label><input type="time" id="pos-arr-time" value="" style="width:110px" placeholder="Auto"></div>'+
+
           '<div class="hpos-fg"><label>Check-out</label><input type="date" id="pos-dep" value="'+tomorrow+'"></div>'+
-          '<div class="hpos-fg"><label>Check-out Time</label><input type="time" id="pos-dep-time" value="12:00" style="width:110px"></div>'+
+          '<div class="hpos-fg"><label>'+__('Times')+'</label><div id="pos-stay-times" style="height:30px;line-height:30px;font-size:var(--text-sm,12px);color:var(--dim);white-space:nowrap"></div></div>'+
           '<div class="hpos-fg"><label>Adults</label><input type="number" id="pos-adults" value="1" min="1" max="30" style="width:70px"></div>'+
           '<div class="hpos-fg"><label>Children</label><input type="number" id="pos-children" value="0" min="0" max="30" style="width:70px"></div>'+
           '<button class="hpos-btn hpos-btn-primary" id="pos-search-btn">Check Availability</button>'+
         '</div>'+
         '<div class="hpos-stats">'+
           '<div class="hpos-stat stat-green"><div class="num" id="stat-avail">-</div><div class="lbl">Available</div></div>'+
-          '<div class="hpos-stat stat-red"><div class="num" id="stat-occ">-</div><div class="lbl">Occupied</div></div>'+
+          '<div class="hpos-stat stat-amber"><div class="num" id="stat-rsv">-</div><div class="lbl">Reserved</div></div>'+
+          '<div class="hpos-stat stat-red"><div class="num" id="stat-occ">-</div><div class="lbl">In House</div></div>'+
           '<div class="hpos-stat stat-blue"><div class="num" id="stat-pct">-</div><div class="lbl">Occupancy</div></div>'+
           '<div class="hpos-stat"><div class="num" id="stat-sel">0</div><div class="lbl">Selected</div></div>'+
         '</div>'+
@@ -852,14 +1312,44 @@ function build_layout(){
           '</div>'+
           '<div id="pos-arr-list"></div>'+
         '</div>'+
+        '<div class="hpos-stays" id="pos-stays" style="display:none">'+
+          '<div class="st-bar"><input type="search" id="pos-stay-q" placeholder="'+__('Search guest, phone, room or booking')+'"></div>'+
+          '<div class="st-chips" id="pos-stay-chips"></div>'+
+          '<div id="pos-stay-list"></div>'+
+        '</div>'+
       '</div>'+
       '<div class="hpos-right">'+
         '<div id="pos-arr-detail" class="pane-hidden"></div>'+
+        '<div id="pos-stay-detail" class="pane-hidden"><div class="cart-empty"><div class="icon">👤</div>'+__('Pick a guest to see their bill and actions')+'</div></div>'+
         '<div id="pos-cart-pane">'+
         '<div class="cart-hdr"><h3>Booking Summary</h3><div class="nights"><span id="cart-nights">1</span> Night(s) Stay</div></div>'+
         '<div class="cart-body">'+
           '<div class="cart-sec">Selected Rooms</div>'+
           '<div id="cart-list"><div class="cart-empty"><div class="icon">🛒</div>Select rooms from the left panel</div></div>'+
+          '<div class="cart-sec">Rate &amp; Discount</div>'+
+          '<div class="gf-row"><label>Agreed Rate / Night</label>'+
+            '<input id="pos-rate-override" type="number" min="0" step="any" placeholder="Tariff rate">'+
+          '</div>'+
+          '<div class="gf-row"><label>Discount</label>'+
+            '<select id="pos-discount-type" style="width:46%">'+
+              '<option value="">None</option><option value="Amount">Amount</option>'+
+              '<option value="Percentage">Percentage</option>'+
+            '</select>'+
+            '<input id="pos-discount-value" type="number" min="0" step="any" value="0" style="width:50%">'+
+          '</div>'+
+          '<div class="gf-row"><label>Remarks</label>'+
+            '<input id="pos-remarks" placeholder="Shown on the folio and the bill">'+
+          '</div>'+
+          '<div class="cart-sec">'+__('Payment now (optional)')+'</div>'+
+          '<div class="gf-row"><label>'+__('Advance / Payment')+'</label>'+
+            '<input id="pos-advance" type="number" min="0" step="any" placeholder="0" style="width:48%">'+
+            '<select id="pos-mop" style="width:48%;margin-left:4%">'+
+              '<option>Cash</option>'+
+            '</select>'+
+          '</div>'+
+          '<div class="gf-row"><label>'+__('Reference / UTR')+'</label><input id="pos-ref" placeholder="'+__('Optional')+'"></div>'+
+          '<label class="cart-check" id="pos-checkin-wrap"><input type="checkbox" id="pos-checkin-now"> '+
+            __('Check the guest in now')+'</label>'+
           '<div class="cart-sec">Guest Details</div>'+
           '<div id="guest-link-wrapper"></div>'+
           '<button class="guest-toggle" id="btn-new-guest">+ New Guest</button>'+

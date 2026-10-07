@@ -14,7 +14,12 @@ class HotelReservation(Document):
             self.company = None
 
         self.validate_dates()
-        
+
+        # Every stay runs from the property's standard check-in time to its standard
+        # check-out time (Hospitality Accounting Settings); rooms are allocated by night.
+        from hospitality_core.hospitality_core.api.stay_policy import apply_stay_times
+        apply_stay_times(self)
+
         self.sync_room_type_with_room()
 
         # Only validate availability if status is Reserved or Checked In
@@ -48,7 +53,8 @@ class HotelReservation(Document):
             departure_date=self.departure_date, 
             ignore_reservation=self.name,
             arrival_time=self.arrival_time,
-            departure_time=self.departure_time
+            departure_time=self.departure_time,
+            ignore_booking=self.get("hotel_booking"),
         )
 
     def before_insert(self):
@@ -121,22 +127,27 @@ class HotelReservation(Document):
         # but since we have other fields to update (in check-in it's just status), it's fine.
         self.status = "Checked In"
         
-        # 2. Update Room Status
+        # 2. Update Room Status (another guest may still be marked Checked In here
+        # after their stay ended; that does not stop this one moving in).
         frappe.db.set_value("Hotel Room", self.room, "status", "Occupied")
         
         # 3. Update Folio Status
         if self.folio:
             frappe.db.set_value("Guest Folio", self.folio, "status", "Open")
 
-            # 4. IMMEDIATE CHARGE
-            # Hospitality Day Logic: Check-in before 8:00 AM counts as "Yesterday"
+            # 4. IMMEDIATE CHARGE for the first night of the stay.
+            # Hospitality Day Logic: Check-in before 8:00 AM counts as "Yesterday" —
+            # but never a night before the booked arrival, and never one on or after
+            # the departure date (those nights are not part of the stay).
             current_hour = now_datetime().hour
-            charge_date = nowdate()
+            charge_date = getdate(nowdate())
             if current_hour < 8:
-                charge_date = add_days(nowdate(), -1)
+                charge_date = getdate(add_days(nowdate(), -1))
+            charge_date = max(charge_date, getdate(self.arrival_date))
+            in_stay = charge_date < getdate(self.departure_date)
 
-            if not already_charged_today(self.folio, charge_date, room=self.room):
-                rate = get_rate(self.rate_plan, self.room_type, charge_date)
+            if in_stay and not already_charged_today(self.folio, charge_date, room=self.room):
+                rate = get_rate(self.rate_plan, self.room_type, charge_date, reservation=self)
                 rate += get_extra_bed_charge(self, charge_date)
                 if rate > 0:
                     post_room_charge(self, rate, charge_date)
@@ -159,19 +170,18 @@ class HotelReservation(Document):
         # Departing early is normal in a hotel; departing in the past is not.
         # Shorten the stay to today so the room goes back on sale for tonight and the
         # nights the guest did not use are not billed by the night audit.
+        # A guest checked out after their departure date (staff forgot) leaves on the
+        # booked date: nothing is added, the stay already ended and the room may
+        # already be someone else's. Only an explicit Extend lengthens a stay.
         if getdate(self.departure_date) > getdate(nowdate()):
+            from hospitality_core.hospitality_core.api.stay_policy import stay_time_values
             original = self.departure_date
-            self.db_set("departure_date", nowdate())
-            self.db_set("departure_time", now_datetime().strftime("%H:%M:%S"))
+            self.db_set({"departure_date": nowdate(), **stay_time_values()})
             self.reload()
             self.add_comment("Info", _(
                 "Early departure: stay shortened from {0} to {1} at check-out."
             ).format(original, nowdate()))
             frappe.msgprint(_("Early departure — stay shortened from {0} to today.").format(original))
-        elif getdate(self.departure_date) < getdate(nowdate()):
-            frappe.throw(_(
-                "Departure date ({0}) is in the past. Extend the stay to today before checking out."
-            ).format(self.departure_date))
 
         # Requirement: "When a reservation is part of a group booking, that reservation cannot be checked out until the master folio is cleared."
         if self.is_group_guest and self.group_booking:
@@ -322,7 +332,10 @@ class HotelReservation(Document):
         self.db_set("status", "Checked Out")
         
         # 3. Update Room Status to Available
-        frappe.db.set_value("Hotel Room", self.room, "status", "Available")
+        # Available only if nobody else is now in it — the next guest may already have
+        # checked in while this one was waiting to be checked out.
+        from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import refresh_room_status
+        refresh_room_status(self.room, exclude=self.name)
 
         # 4. Move the parent booking on if this was its last live room.
         self.sync_parent_booking()
@@ -492,26 +505,28 @@ def extend_stay(reservation, new_departure_date, new_departure_time=None):
     result = is_room_free(
         doc.room, doc.departure_date, new_departure_date,
         arrival_time=doc.departure_time, departure_time=new_departure_time,
-        ignore_reservation=doc.name,
+        ignore_reservation=doc.name, ignore_booking=doc.get("hotel_booking"),
     )
     if not result["free"]:
         frappe.throw(_("Cannot extend: {0}").format(result["reason"]))
 
+    from hospitality_core.hospitality_core.api.stay_policy import stay_time_values
+
     previous = doc.departure_date
-    doc.db_set("departure_date", getdate(new_departure_date))
-    if new_departure_time:
-        doc.db_set("departure_time", new_departure_time)
+    doc.db_set({"departure_date": getdate(new_departure_date), **stay_time_values()})
     doc.add_comment("Info", _("Stay extended from {0} to {1}.").format(previous, new_departure_date))
 
-    # Keep the parent booking's window covering all of its rooms.
-    if doc.get("hotel_booking"):
-        booking_departure = frappe.db.get_value(
-            "Hotel Booking", doc.hotel_booking, "departure_date"
-        )
-        if booking_departure and getdate(new_departure_date) > getdate(booking_departure):
-            frappe.db.set_value(
-                "Hotel Booking", doc.hotel_booking, "departure_date", getdate(new_departure_date)
-            )
+    # Bill the added nights that are already due (tonight, if the 2 PM audit has run,
+    # or past nights when an overdue guest is extended because they really stayed).
+    # Later nights are posted by the audit as usual.
+    if doc.status == "Checked In":
+        from hospitality_core.hospitality_core.api.night_audit import post_due_nights
+        doc.reload()
+        post_due_nights(doc)
+
+    # Stretch the parent booking over the new dates and reprice it, so its total and
+    # balance due include the extra nights rather than staying at the original quote.
+    doc.sync_parent_booking()
 
     return {
         "reservation": doc.name,

@@ -48,13 +48,76 @@ class HotelEnquiry(Document):
 			self.nights = 0
 
 	def calculate_quote(self):
-		"""Price each requested room line at rooms x nights x rate."""
-		total = 0.0
+		"""Price each requested room line through the canonical tariff engine.
+
+		The quote an agent gives on the phone is the number the guest will be billed, so
+		it is priced the same way the folio will be: weekend and holiday nights at the
+		premium rate, extra beds added for a party over capacity, then the line's
+		discount off the gross.
+
+		A rate the agent typed wins over all of that — `is_rate_overridden` marks it, and
+		from then on nothing recomputes the rate, only the amounts around it.
+
+		The discount is a property of the enquiry, not of a room line: an agent agrees
+		one figure off the whole quote. So lines total to a subtotal and the discount
+		comes off that once.
+		"""
+		from hospitality_core.hospitality_core.api.tariff import apply_discount
+
+		subtotal = 0.0
 		for line in self.room_lines:
 			line.nights = cint(self.nights)
-			line.amount = flt(line.rate_quoted) * max(cint(line.qty), 1) * max(cint(line.nights), 1)
-			total += flt(line.amount)
-		self.quoted_total = total
+			quote = self._quote_line(line)
+
+			if quote:
+				line.extra_beds_adult = quote["extra_beds_adult"]
+				line.extra_beds_child = quote["extra_beds_child"]
+				line.extra_bed_amount = quote["extra_bed_total"]
+				line.amount = quote["gross_total"]
+				if not cint(line.is_rate_overridden):
+					# The room-only rate, not the all-in one: `extra_bed_amount` sits
+					# beside it and `amount` already counts the beds once. Storing the
+					# all-in figure here charged them twice — on screen, and again the
+					# moment an agent nudged the rate and it came back as an agreed rate.
+					line.rate_quoted = quote["average_room_nightly"]
+			else:
+				# No usable dates yet: fall back to the flat arithmetic so a half-filled
+				# enquiry still shows a number.
+				line.amount = flt(line.rate_quoted) * max(cint(line.qty), 1) * max(cint(line.nights), 1)
+				line.extra_bed_amount = 0
+
+			line.gross_amount = line.amount
+			subtotal += flt(line.amount)
+
+		self.quoted_subtotal = subtotal
+		self.discount_amount, self.quoted_total = apply_discount(
+			subtotal, self.discount_type, self.discount_value
+		)
+
+	def _quote_line(self, line):
+		"""Server-priced quote for one enquiry line, or None if it cannot be priced."""
+		if not (line.room_type and self.check_in_date and self.check_out_date):
+			return None
+		if getdate(self.check_out_date) <= getdate(self.check_in_date):
+			return None
+
+		from hospitality_core.hospitality_core.api.tariff import quote_stay
+
+		try:
+			return quote_stay(
+				line.room_type, self.check_in_date, self.check_out_date,
+				qty=line.qty, adults=line.adults, children=line.children,
+				extra_beds_adult=line.get("extra_beds_adult"),
+				extra_beds_child=line.get("extra_beds_child"),
+				rate_override=line.rate_quoted if cint(line.get("is_rate_overridden")) else None,
+			)
+		except Exception:
+			# A category with a broken tariff must not stop an agent saving an enquiry.
+			frappe.log_error(
+				f"Could not price {line.room_type} on enquiry {self.name}",
+				"Hotel Enquiry pricing",
+			)
+			return None
 
 	def validate_lost_reason(self):
 		if self.status_type == "Lost" and not self.lost_reason:

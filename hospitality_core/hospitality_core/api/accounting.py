@@ -150,6 +150,13 @@ def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
         park_advance_as_liability(payment_doc, folio_id, amount, cancel=cancel)
         return
 
+    # Revenue is recognised by the Sales Invoice made at check-out (api/invoicing.py),
+    # which also books the GST. Moving "suspense -> income" here as well would count
+    # the same stay twice, so a payment on a room or company folio is just a receipt:
+    # its Payment Entry (dr Bank / cr Receivable) is the whole of its accounting, and
+    # the invoice allocates it.
+    return
+
     # Calculate Net portion using configured GST rate
     breakdown = get_tax_breakdown(abs(flt(amount)))
     net_amount = breakdown["net_amount"]

@@ -18,9 +18,10 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, getdate
 
-# Saturday and Sunday nights carry the weekend tariff. Python's weekday() is
-# Monday=0 ... Saturday=5, Sunday=6.
-WEEKEND_WEEKDAYS = (5, 6)
+# Friday, Saturday and Sunday nights carry the weekend tariff. Python's weekday() is
+# Monday=0 ... Friday=4, Saturday=5, Sunday=6. This is the only place the weekend is
+# defined: every quote, POS price, booking total and nightly charge reads it.
+WEEKEND_WEEKDAYS = (4, 5, 6)
 
 # Cache key for the resolved holiday dates of one Holiday List. Cleared whenever a
 # Holiday List is saved (see hooks.doc_events).
@@ -28,7 +29,7 @@ HOLIDAY_CACHE = "hospitality_tariff_holidays"
 
 
 def is_weekend(date):
-	"""True for a Saturday or Sunday night."""
+	"""True for a Friday, Saturday or Sunday night."""
 	return getdate(date).weekday() in WEEKEND_WEEKDAYS
 
 
@@ -102,7 +103,7 @@ def rate_class(date, holiday_list=None):
 def is_premium_date(date, holiday_list=None):
 	"""True when the night is charged at the weekend tariff.
 
-	That is a Saturday, a Sunday, or any date the Holiday List names — the property
+	That is a Friday, a Saturday, a Sunday, or any date the Holiday List names — the property
 	prices a public holiday the same as a weekend.
 	"""
 	return rate_class(date, holiday_list) != "Weekday"

@@ -229,36 +229,12 @@ def _post(folio, amount, description, posting_date, reference=None):
 
 
 def realize_advance_income(booking, amount):
-	"""Release an applied advance from the liability account into income suspense.
+	"""No longer posts anything.
 
-	While the money sat on the booking folio it was a liability — the resort owed a stay.
-	Applying it to a room folio is the point that obligation starts being delivered.
+	This used to move an applied advance from the liability account into income
+	suspense at check-in. Revenue is now recognised once, by the Sales Invoice made at
+	check-out, and that invoice's submit hook (invoicing.settle_parked_advances) releases
+	the parked advance from the liability itself. Posting here too would leave the
+	suspense account holding money nothing ever cleared.
 	"""
-	settings = frappe.get_single("Hospitality Accounting Settings")
-	liability = settings.get("advance_liability_account")
-	suspense = settings.get("income_suspense_account")
-	if not (liability and suspense):
-		return
-
-	company = get_hotel_company()
-	cost_center = settings.get("cost_center")
-	today = nowdate()
-
-	for account, debit, credit in (
-		(liability, flt(amount), 0.0),
-		(suspense, 0.0, flt(amount)),
-	):
-		frappe.get_doc({
-			"doctype": "GL Entry",
-			"posting_date": today,
-			"account": account,
-			"debit": debit,
-			"credit": credit,
-			"debit_in_account_currency": debit,
-			"credit_in_account_currency": credit,
-			"company": company,
-			"cost_center": cost_center,
-			"voucher_type": "Hotel Booking",
-			"voucher_no": booking.name,
-			"remarks": _("Advance applied from booking {0}").format(booking.name),
-		}).insert(ignore_permissions=True)
+	return

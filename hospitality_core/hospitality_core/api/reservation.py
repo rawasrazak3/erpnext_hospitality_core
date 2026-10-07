@@ -41,114 +41,52 @@ def _coerce_time(value):
 
 @frappe.whitelist()
 def check_availability(room, arrival_date, departure_date, ignore_reservation=None,
-                       arrival_time=None, departure_time=None):
+                       arrival_time=None, departure_time=None, ignore_booking=None):
     """
     Checks if a room is available for the given date+time range.
     Returns True if available, raises ValidationError if not.
+
+    Delegates to api.availability so a reservation respects the same blockers as the
+    POS and the CRM: Tentative reservations and rooms held on a booking, not only
+    Reserved/Checked In stays. This used to be its own loop, which let a room held on
+    a Tentative booking be reserved for somebody else.
     """
     if not room or not arrival_date or not departure_date:
         return
 
-    # 1. Check if Room is Enabled (Maintenance check)
-    room_status = frappe.db.get_value("Hotel Room", room, ["status", "is_enabled"], as_dict=True)
-    if not room_status.is_enabled:
-        frappe.throw(_("Room {0} is currently disabled/under maintenance.").format(room))
-    
-    if room_status.status in BLOCKED_STATUSES:
-        frappe.throw(blocked_reason(room, room_status.status))
+    from hospitality_core.hospitality_core.api.availability import is_room_free
 
-    # Build full datetime for the new booking
-    new_arrival_dt = _make_datetime(arrival_date, arrival_time, "14:00:00")
-    new_departure_dt = _make_datetime(departure_date, departure_time, "12:00:00")
-
-    # 2. Check Overlapping Reservations
-    # Logic: New Arrival < Existing Departure AND New Departure > Existing Arrival
-    filters = {
-        "room": room,
-        "status": ["in", ["Reserved", "Checked In"]],
-        "name": ["!=", ignore_reservation] if ignore_reservation else ["is", "set"]
-    }
-    
-    existing_bookings = frappe.get_all("Hotel Reservation", 
-        filters=filters,
-        fields=["name", "arrival_date", "arrival_time", "departure_date", "departure_time", "guest"]
+    result = is_room_free(
+        room, arrival_date, departure_date,
+        arrival_time=arrival_time, departure_time=departure_time,
+        ignore_reservation=ignore_reservation, ignore_booking=ignore_booking,
     )
+    if not result["free"]:
+        frappe.throw(result["reason"])
 
-    for booking in existing_bookings:
-        # Build full datetime for the existing booking
-        existing_arrival_dt = _make_datetime(booking.arrival_date, booking.arrival_time, "14:00:00")
-        existing_departure_dt = _make_datetime(booking.departure_date, booking.departure_time, "12:00:00")
-
-        # Check for strict overlap using full Datetime comparison
-        if (new_arrival_dt < existing_departure_dt) and \
-           (new_departure_dt > existing_arrival_dt):
-            # It's an overlap
-            frappe.throw(_("Room {0} is already booked for Guest {1} from {2} to {3}. (Reservation: {4})").format(
-                    room, booking.guest, booking.arrival_date, booking.departure_date, booking.name
-                )
-             )
-    
     return True
 
 def check_bulk_availability(rooms, arrival_date, departure_date, ignore_reservation=None,
                             arrival_time=None, departure_time=None):
     """
-    Checks if a list of rooms is available for the given date+time range.
-    Collects ALL conflicts and raises a single ValidationError.
+    Checks a list of rooms for the given nights and raises one ValidationError listing
+    every conflict. Uses the shared rule in api.availability (by night; times are the
+    standard ones and play no part).
     """
     if not rooms or not arrival_date or not departure_date:
         return
 
+    from hospitality_core.hospitality_core.api.availability import is_room_free
+
     conflicts = []
-
-    # Build full datetime for the new booking
-    new_arrival_dt = _make_datetime(arrival_date, arrival_time, "14:00:00")
-    new_departure_dt = _make_datetime(departure_date, departure_time, "12:00:00")
-
-    # 1. Check Room Maintenance Status for all rooms in batch
-    room_data = frappe.get_all("Hotel Room", 
-        filters={"room_number": ["in", rooms]},
-        fields=["room_number", "status", "is_enabled"]
-    )
-    
-    room_map = {r.room_number: r for r in room_data}
-
     for room_num in rooms:
-        r = room_map.get(room_num)
-        if not r:
+        if not frappe.db.exists("Hotel Room", room_num):
             conflicts.append(_("Room {0} does not exist.").format(room_num))
             continue
-            
-        if not r.is_enabled:
-            conflicts.append(_("Room {0} is currently disabled/under maintenance.").format(room_num))
-        elif r.status in BLOCKED_STATUSES:
-            conflicts.append(blocked_reason(room_num, r.status))
-
-    # 2. Check Overlapping Reservations for all rooms in batch
-    # Logic: New Arrival < Existing Departure AND New Departure > Existing Arrival
-    existing_bookings = frappe.get_all("Hotel Reservation", 
-        filters={
-            "room": ["in", rooms],
-            "status": ["in", ["Reserved", "Checked In"]],
-            "name": ["!=", ignore_reservation] if ignore_reservation else ["is", "set"]
-        },
-        fields=["name", "arrival_date", "arrival_time", "departure_date", "departure_time", "guest", "room"]
-    )
-
-    for booking in existing_bookings:
-        # Build full datetime for the existing booking
-        existing_arrival_dt = _make_datetime(booking.arrival_date, booking.arrival_time, "14:00:00")
-        existing_departure_dt = _make_datetime(booking.departure_date, booking.departure_time, "12:00:00")
-
-        # Check for strict overlap using full Datetime comparison
-        if (new_arrival_dt < existing_departure_dt) and \
-           (new_departure_dt > existing_arrival_dt):
-            # Overlap found
-            conflicts.append(
-                _("Room {0} is already booked for Guest {1} from {2} to {3}. (Reservation: {4})").format(
-                    booking.room, booking.guest, booking.arrival_date, booking.departure_date, booking.name
-                )
-            )
+        result = is_room_free(room_num, arrival_date, departure_date,
+                              ignore_reservation=ignore_reservation)
+        if not result["free"]:
+            conflicts.append(result["reason"])
 
     if conflicts:
         message = _("The following availability issues were found:") + "<br><br>"
@@ -166,7 +104,7 @@ def check_bulk_availability(rooms, arrival_date, departure_date, ignore_reservat
 @frappe.validate_and_sanitize_search_inputs
 def get_available_rooms_for_picker(doctype, txt, searchfield, start, page_len, filters):
     """
-    Search picker for rooms that are available for the selected dates.
+    Search picker for rooms that are free for the selected nights.
     Filters: arrival_date, departure_date, room_type, ignore_reservation
     """
     filters = frappe.parse_json(filters)
@@ -174,8 +112,10 @@ def get_available_rooms_for_picker(doctype, txt, searchfield, start, page_len, f
     departure = filters.get("departure_date")
     room_type = filters.get("room_type")
     ignore = filters.get("ignore_reservation")
+    txt = (txt or "").lower()
+    start, page_len = int(start or 0), int(page_len or 20)
 
-    if not arrival or not departure:
+    if not arrival or not departure or getdate(departure) <= getdate(arrival):
         # If dates aren't set, return all rooms of that type (or all if no type)
         return frappe.db.sql("""
             SELECT name, room_type, status
@@ -187,29 +127,18 @@ def get_available_rooms_for_picker(doctype, txt, searchfield, start, page_len, f
             LIMIT %s, %s
         """, (room_type, room_type, f"%{txt}%", start, page_len))
 
-    # Complex Query: Find rooms that are NOT in the overlapping reservations set
-    # Uses CONCAT(date, time) to build full datetime for accurate time-based overlap comparison
-    return frappe.db.sql("""
-        SELECT name, room_type, status
-        FROM `tabHotel Room`
-        WHERE is_enabled = 1
-        AND status NOT IN ({blocked})
-        AND (%s IS NULL OR room_type = %s)
-        AND name LIKE %s
-        AND name NOT IN (
-            SELECT room FROM `tabHotel Reservation`
-            WHERE status IN ('Reserved', 'Checked In')
-            AND name != %s
-            AND CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) < %s
-            AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
-        )
-        ORDER BY name ASC
-        LIMIT %s, %s
-    """.format(blocked=", ".join(["%s"] * len(BLOCKED_STATUSES))),
-        (*BLOCKED_STATUSES, room_type, room_type, f"%{txt}%", ignore or "",
-         f"{departure} {filters.get('departure_time') or '12:00:00'}",
-         f"{arrival} {filters.get('arrival_time') or '14:00:00'}",
-         start, page_len))
+    from hospitality_core.hospitality_core.api.availability import get_availability
+
+    booking = frappe.db.get_value("Hotel Reservation", ignore, "hotel_booking") if ignore else None
+    data = get_availability(arrival, departure, room_type=room_type or None,
+                            include_soft_holds=False, ignore_reservation=ignore,
+                            ignore_booking=booking)
+    rows = [
+        (r["name"], r["room_type"], r["status"])
+        for r in data["rooms"]
+        if r["available"] and txt in r["name"].lower()
+    ]
+    return rows[start:start + page_len]
 
 def create_folio(reservation_doc):
     """
@@ -242,7 +171,8 @@ def create_folio(reservation_doc):
 @frappe.whitelist()
 def get_room_rate(room=None, rate_plan=None, room_type=None, arrival_date=None,
                   discount_type=None, discount_value=None, is_complimentary=None,
-                  extra_beds_adult=0, extra_beds_child=0):
+                  extra_beds_adult=0, extra_beds_child=0,
+                  agreed_rate=None, is_rate_overridden=0):
     """
     Returns the base rate and discounted rate for the reservation form preview.
     Called by hotel_reservation.js when room, rate_plan, or discount fields change.
@@ -262,7 +192,10 @@ def get_room_rate(room=None, rate_plan=None, room_type=None, arrival_date=None,
         return {"base_rate": 0, "discount_amount": 0, "final_rate": 0}
 
     date = arrival_date or nowdate()
-    base_rate = flt(get_rate(rate_plan, room_type, date))
+    base_rate = flt(get_rate(
+        rate_plan, room_type, date,
+        reservation={"is_rate_overridden": is_rate_overridden, "agreed_rate": agreed_rate},
+    ))
 
     # Extra beds are a per-night charge on top of the room, so they belong in the
     # figure the desk is quoting from.

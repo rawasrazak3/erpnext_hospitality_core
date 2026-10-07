@@ -63,7 +63,9 @@ def get_console_data(target_date=None):
 		as_dict=True,
 	)
 
-	# 2. Fetch Departures for specific date
+	# 2. Fetch Departures for specific date. Today's list also carries guests nobody
+	# checked out yet: their stay is over and the room is free, but the desk still has
+	# to settle and close them.
 	departures = frappe.db.sql(
 		"""
         SELECT res.name, g.full_name as guest_name, res.status, res.room, res.room_type,
@@ -71,33 +73,28 @@ def get_console_data(target_date=None):
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
         LEFT JOIN `tabGuest Folio` f ON res.folio = f.name
-        WHERE res.departure_date = %s
-        AND res.status IN ('Checked In', 'Checked Out')
-        ORDER BY res.status ASC, res.room ASC
+        WHERE (res.departure_date = %(d)s AND res.status IN ('Checked In', 'Checked Out'))
+           OR (res.status = 'Checked In' AND res.departure_date < %(d)s AND %(is_today)s = 1)
+        ORDER BY res.status ASC, res.departure_date ASC, res.room ASC
     """,
-		(target_date,),
+		{"d": target_date, "is_today": 1 if str(target_date) == str(nowdate()) else 0},
 		as_dict=True,
 	)
 
 	# 3. Stats Calculation (Date Sensitive)
 	total_rooms = frappe.db.count("Hotel Room", {"is_enabled": 1})
 
-	# Calculate In-House (Night Occupancy) using datetime comparison
-	# Logic: Arrived (datetime) <= Now AND Departing (datetime) > Now
-	# This captures:
-	#   - Old Check-ins (Stayovers)
-	#   - New Check-ins (Arrivals)
-	# It Excludes:
-	#   - Due Outs (Departing Today before their checkout time)
+	# In-house tonight: checked-in stays whose booked nights include this date.
+	# Excludes guests leaving today and anyone past their departure who has not been
+	# checked out yet (their room is already free).
 	in_house_count = (
 		frappe.db.sql(
 			"""
         SELECT COUNT(*) FROM `tabHotel Reservation`
-        WHERE CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= %s
-        AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
+        WHERE arrival_date <= %s AND departure_date > %s
         AND status = 'Checked In'
     """,
-			(f"{target_date} 14:00:00", f"{target_date} 14:00:00"),
+			(target_date, target_date),
 		)[0][0]
 		or 0
 	)

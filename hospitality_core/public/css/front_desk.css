@@ -1,0 +1,137 @@
+/* Front desk dialogs (public/js/front_desk.js). Built on Frappe's tokens so they follow
+   the active theme, including dark mode. */
+.hfd-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--border-color);
+}
+.hfd-guest {
+	font-size: var(--text-lg);
+	font-weight: 600;
+	color: var(--text-color);
+}
+.hfd-sub {
+	font-size: var(--text-sm);
+	color: var(--text-muted);
+}
+.hfd-room {
+	text-align: right;
+}
+.hfd-room-no {
+	font-size: var(--text-lg);
+	font-weight: 700;
+	color: var(--text-color);
+}
+.hfd-stay {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 18px;
+	padding: 8px 0;
+	font-size: var(--text-sm);
+	color: var(--text-color);
+}
+.hfd-pill {
+	display: inline-block;
+	font-size: var(--text-xs);
+	font-weight: 600;
+	padding: 1px 8px;
+	border-radius: 999px;
+	vertical-align: middle;
+}
+.hfd-pill-vip {
+	background: var(--bg-yellow);
+	color: var(--text-on-yellow);
+}
+.hfd-pill-bad {
+	background: var(--bg-red);
+	color: var(--text-on-red);
+}
+.hfd-section {
+	margin: 12px 0 6px;
+	font-size: var(--text-xs);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-muted);
+}
+.hfd-table {
+	width: 100%;
+	font-size: var(--text-sm);
+	border-collapse: collapse;
+}
+.hfd-table th {
+	font-weight: 500;
+	color: var(--text-muted);
+	border-bottom: 1px solid var(--border-color);
+	padding: 4px 6px;
+}
+.hfd-table td {
+	padding: 5px 6px;
+	border-bottom: 1px solid var(--border-color);
+	font-variant-numeric: tabular-nums;
+}
+.hfd-table tr.hfd-payment td,
+.hfd-table tr.hfd-discount td {
+	color: var(--green-600);
+}
+.hfd-tag {
+	font-size: var(--text-xs);
+	padding: 0 6px;
+	border-radius: 999px;
+	background: var(--subtle-fg);
+	color: var(--text-muted);
+}
+.hfd-tag.hfd-weekend,
+.hfd-tag.hfd-holiday {
+	background: var(--bg-orange);
+	color: var(--text-on-orange);
+}
+.hfd-totals {
+	margin-top: 10px;
+	padding: 8px 12px;
+	background: var(--subtle-fg);
+	border-radius: var(--border-radius-md);
+}
+.hfd-row {
+	display: flex;
+	justify-content: space-between;
+	padding: 3px 0;
+	font-size: var(--text-sm);
+	font-variant-numeric: tabular-nums;
+}
+.hfd-row.hfd-big {
+	font-size: var(--text-lg);
+	font-weight: 700;
+	border-top: 1px solid var(--border-color);
+	margin-top: 4px;
+	padding-top: 7px;
+}
+.hfd-row.hfd-good span:last-child {
+	color: var(--green-600);
+}
+.hfd-row.hfd-bad span:last-child {
+	color: var(--red-600);
+}
+.hfd-warn,
+.hfd-note {
+	margin: 8px 0;
+	padding: 8px 10px;
+	border-radius: var(--border-radius);
+	font-size: var(--text-sm);
+}
+.hfd-warn {
+	background: var(--bg-orange);
+	color: var(--text-on-orange);
+}
+.hfd-note {
+	background: var(--bg-blue);
+	color: var(--text-on-blue);
+}
+.hfd-empty {
+	color: var(--text-muted);
+	font-size: var(--text-sm);
+	padding: 6px 0;
+}

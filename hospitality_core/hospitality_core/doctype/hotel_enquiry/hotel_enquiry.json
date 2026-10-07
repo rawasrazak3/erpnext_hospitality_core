@@ -33,6 +33,13 @@
   "budget",
   "col_break_money",
   "quoted_total",
+  "sec_discount",
+  "quoted_subtotal",
+  "discount_type",
+  "discount_value",
+  "col_break_discount",
+  "discount_amount",
+  "remarks",
   "sec_followup",
   "next_follow_up",
   "col_break_followup",
@@ -111,7 +118,9 @@
    "fieldtype": "Link",
    "in_standard_filter": 1,
    "label": "Source",
-   "options": "Hotel Enquiry Source"
+   "options": "Hotel Enquiry Source",
+   "reqd": 1,
+   "description": "Where this enquiry came from. Required, so every lead can be attributed."
   },
   {
    "fieldname": "enquiry_owner",
@@ -205,7 +214,8 @@
    "fieldname": "quoted_total",
    "fieldtype": "Currency",
    "label": "Quoted Total",
-   "read_only": 1
+   "read_only": 1,
+   "description": "Subtotal less the discount. This is what the guest pays."
   },
   {
    "fieldname": "sec_followup",
@@ -334,11 +344,52 @@
    "fieldname": "room_details_preview",
    "fieldtype": "HTML",
    "label": "Room Details"
+  },
+  {
+   "fieldname": "sec_discount",
+   "fieldtype": "Section Break",
+   "label": "Discount & Remarks"
+  },
+  {
+   "fieldname": "quoted_subtotal",
+   "fieldtype": "Currency",
+   "label": "Subtotal",
+   "read_only": 1,
+   "description": "Rooms plus extra beds, before discount."
+  },
+  {
+   "fieldname": "discount_type",
+   "fieldtype": "Select",
+   "label": "Discount Type",
+   "options": "\nAmount\nPercentage"
+  },
+  {
+   "fieldname": "discount_value",
+   "fieldtype": "Float",
+   "label": "Discount Value",
+   "depends_on": "discount_type",
+   "description": "A flat amount off the whole booking, or a percentage of it."
+  },
+  {
+   "fieldname": "col_break_discount",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "discount_amount",
+   "fieldtype": "Currency",
+   "label": "Discount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "description": "Carried to every reservation, onto the folio and the guest's bill."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-11 12:00:00.000000",
+ "modified": "2026-09-17 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hotel Enquiry",

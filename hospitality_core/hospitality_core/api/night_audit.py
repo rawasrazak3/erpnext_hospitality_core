@@ -5,12 +5,26 @@ from frappe.utils import add_days, cint, nowdate, getdate, flt
 from hospitality_core.hospitality_core.api.folio import sync_folio_balance, mirror_to_company_folio, mirror_to_group_folio
 from hospitality_core.hospitality_core.api.tariff import nightly_rate, _rates_for
 
+# What the audit reads off each checked-in reservation. get_rate and
+# get_extra_bed_charge take their inputs from this row, so a field missing here is a
+# charge silently not billed: extra beds and agreed rates were left out, and only the
+# check-in night (which uses the full document) billed them.
+AUDIT_FIELDS = [
+    "name", "guest", "room", "room_type", "rate_plan",
+    "arrival_date", "departure_date", "company", "folio",
+    "is_complimentary", "discount_type", "discount_value",
+    "is_company_guest", "is_group_guest", "group_booking",
+    "extra_beds_adult", "extra_beds_child", "agreed_rate", "is_rate_overridden",
+    "remarks", "hotel_booking",
+]
+
+
 def run_daily_audit():
     """
     Scheduled Job: Runs at 2 PM daily.
     1. Auto-cancels no-show reservations (arrival passed, still Reserved).
-    2. Checks for Overstays and extends departure date for ALL checked-in rooms.
-    3. Posts Room Rent + Discounts for all rooms currently Checked In.
+    2. Posts Room Rent + Discounts for each checked-in stay whose booked nights
+       include today. Stays past their departure are never extended or charged.
     4. SKIPS posting if a Room Rent charge already exists for the current date.
     """
     posting_date = nowdate()
@@ -21,12 +35,7 @@ def run_daily_audit():
     # Step 2: Fetch active reservations with Discount settings
     active_reservations = frappe.get_all("Hotel Reservation", 
         filters={"status": "Checked In"},
-        fields=[
-            "name", "guest", "room", "room_type", "rate_plan", 
-            "departure_date", "company", "folio",
-            "is_complimentary", "discount_type", "discount_value",
-            "is_company_guest", "is_group_guest", "group_booking"
-        ]
+        fields=AUDIT_FIELDS,
     )
 
     count = 0
@@ -78,12 +87,16 @@ def cancel_no_shows(posting_date):
                 doc = frappe.get_doc("Hotel Reservation", res.name)
                 doc.db_set("status", "No Show")
                 if res.room:
-                    frappe.db.set_value("Hotel Room", res.room, "status", "Available")
+                    from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import refresh_room_status
+                    refresh_room_status(res.room)
                 doc.add_comment("Info", _(
                     "Marked No Show (Night Audit): guest did not arrive on {0}. "
                     "An advance was received, so this reservation was NOT cancelled — "
                     "apply the cancellation policy and refund or transfer the balance."
                 ).format(res.arrival_date))
+                # Let the booking show "No Show" too, so its advance is not lost sight of
+                # under a booking that still reads Confirmed.
+                doc.sync_parent_booking()
                 no_show_count += 1
                 continue
 
@@ -124,26 +137,65 @@ def _has_money_against_it(res):
     return flt(total) < -0.01
 
 def process_single_reservation(res, posting_date):
-    # Step A: Handle overstay FIRST — regardless of whether we will bill today.
-    # This ensures departure dates are always extended for ALL checked-in rooms
-    # even if billing was already done (e.g. via check-in billing at 8 AM).
-    # If today is their departure date (or past it) and they are still Checked In, they overstayed.
-    if getdate(res.departure_date) <= getdate(posting_date):
-        handle_overstay(res)
+    """Post the room charges due on one in-house stay, up to posting_date.
 
-    # Step B: Skip billing if already charged today to avoid duplicates
-    if already_charged_today(res.folio, posting_date, room=res.room):
-        return False
+    A stay is the nights arrival_date <= night < departure_date, so the departure date
+    itself is never charged. A guest still marked Checked In after their departure
+    (staff forgot to check them out) is NOT extended and NOT charged: the room is
+    already free for the next guest, and only an explicit Extend adds nights. This used
+    to call handle_overstay, which pushed the departure out a day and billed another
+    night every afternoon, blocking the room for whoever had booked it next.
+    """
+    return bool(post_due_nights(res, posting_date))
 
-    # Step C: Get Base Rate and post room charge
-    daily_rate = get_rate(res.rate_plan, res.room_type, posting_date)
-    daily_rate += get_extra_bed_charge(res, posting_date)
 
-    if daily_rate > 0:
-        post_room_charge(res, daily_rate, posting_date)
-        return True
-        
-    return False
+def post_due_nights(res, upto=None):
+    """Charge every booked night from the first one billed up to `upto` not yet billed.
+
+    Usually that is just tonight. It also catches up nights the 2 PM audit could not
+    have known about — a stay extended after the audit ran, or an overdue guest who is
+    extended because they really stayed — so extending always bills the nights it adds.
+    Nights before the first charge (before the guest checked in) are never billed.
+    Returns the number of nights posted.
+    """
+    upto = getdate(upto or nowdate())
+    departure = getdate(res.departure_date)
+    last_night = min(upto, add_days(departure, -1))
+
+    # A voided night counts as handled: someone waived it on purpose, and catching up
+    # must not quietly charge it again.
+    billed = {
+        getdate(d) for d in frappe.db.sql_list(
+            """SELECT DISTINCT posting_date FROM `tabFolio Transaction`
+            WHERE parent=%s AND item IN %s""",
+            (res.folio, tuple(get_room_rent_item_codes()) or ("ROOM-RENT",)),
+        )
+    }
+    if not billed:
+        # Not charged yet: check-in posts the first night. Until then post only a
+        # night that is due today and inside the stay.
+        start = getdate(res.get("arrival_date") or upto)
+        if start > upto:
+            return 0
+        nights = [upto] if start <= upto <= last_night else []
+    else:
+        nights = []
+        night = min(billed)
+        while night <= last_night:
+            if night not in billed:
+                nights.append(night)
+            night = getdate(add_days(night, 1))
+
+    posted = 0
+    for night in nights:
+        if already_charged_today(res.folio, night, room=res.room):
+            continue
+        daily_rate = get_rate(res.rate_plan, res.room_type, night, reservation=res)
+        daily_rate += get_extra_bed_charge(res, night)
+        if daily_rate > 0:
+            post_room_charge(res, daily_rate, night)
+            posted += 1
+    return posted
 
 def already_charged_today(folio_name, date, room=None):
     filters = {
@@ -160,41 +212,6 @@ def already_charged_today(folio_name, date, room=None):
 
 def get_room_rent_item_codes():
     return frappe.db.sql_list("SELECT name FROM `tabItem` WHERE item_code='ROOM-RENT' OR item_group='Accommodation'")
-
-def handle_overstay(res):
-    """Extend a guest who is still in-house past their departure date.
-
-    The extension bypasses validation by design (the guest is physically in the room),
-    but that means it can silently overlap an incoming reservation for the same room.
-    Check first and flag the clash for the front desk rather than creating a double
-    booking nobody notices until the next guest is standing at the counter.
-    """
-    from hospitality_core.hospitality_core.api.availability import is_room_free
-
-    new_departure = add_days(nowdate(), 1)
-
-    clash = is_room_free(
-        res.room, nowdate(), new_departure, ignore_reservation=res.name
-    )
-
-    frappe.db.set_value("Hotel Reservation", res.name, {
-        "departure_date": new_departure,
-        "departure_time": "12:00:00",
-        "_user_tags": "Overstay"
-    })
-
-    doc = frappe.get_doc("Hotel Reservation", res.name)
-    if clash.get("free"):
-        doc.add_comment("Info", _("Auto-Extended: Guest still in-house at 2 PM."))
-    else:
-        doc.add_comment("Info", _(
-            "Auto-Extended: guest still in-house at 2 PM, but room {0} is also booked — "
-            "{1}. Move one of the two."
-        ).format(res.room, clash.get("reason")))
-        frappe.log_error(
-            f"Overstay on {res.name} clashes with {clash.get('reservation')} in room {res.room}",
-            "Night Audit overstay clash",
-        )
 
 def get_extra_bed_charge(res, date=None):
     """Nightly extra-bed charge for a reservation, or 0 if it has none.
@@ -216,19 +233,51 @@ def get_extra_bed_charge(res, date=None):
     )
 
 
-def get_rate(rate_plan, room_type, date):
+def get_rate(rate_plan, room_type, date, reservation=None):
     """The nightly tariff for one night of one reservation.
 
-    A Rate Plan is a negotiated override and wins outright while it is in force. With no
-    plan (or outside its validity window) the room type's own tariff applies, and that
-    tariff is weekday/weekend split — the property charges more Friday through Sunday.
+    Precedence, highest first:
+
+      1. An agreed rate on the reservation. A sales agent negotiated it with the guest,
+         so nothing downstream may quietly recompute it — this is what carries a price
+         changed in the CRM all the way to the invoice.
+      2. A Rate Plan, while it is in force.
+      3. The room type's own tariff, weekday/weekend split.
     """
+    agreed = _agreed_rate(reservation)
+    if agreed is not None:
+        return agreed
+
     if rate_plan:
         plan = frappe.get_doc("Room Rate Plan", rate_plan)
         if getdate(plan.valid_from) <= getdate(date) <= getdate(plan.valid_to):
             return plan.rate
 
     return nightly_rate(_rates_for(room_type), date)
+
+
+def _agreed_rate(reservation):
+    """The reservation's agreed nightly rate, or None when the tariff still applies.
+
+    Accepts a reservation document, a dict, or a name, because the callers differ: the
+    night audit holds a row from a SQL read, check-in holds the document itself.
+    """
+    if reservation is None:
+        return None
+
+    if isinstance(reservation, str):
+        reservation = frappe.db.get_value(
+            "Hotel Reservation", reservation,
+            ["is_rate_overridden", "agreed_rate"], as_dict=True,
+        ) or {}
+
+    if not cint(reservation.get("is_rate_overridden")):
+        return None
+
+    rate = flt(reservation.get("agreed_rate"))
+    # A zero agreed rate would mean a free stay; that is what `is_complimentary` is for,
+    # so treat it as "not set" rather than silently billing nothing.
+    return rate if rate > 0 else None
 
 def post_room_charge(res, base_amount, date):
     """
@@ -268,7 +317,9 @@ def post_room_charge(res, base_amount, date):
         "parentfield": "transactions",
         "posting_date": date,
         "item": "ROOM-RENT", 
-        "description": f"Room Charge - {res.room}",
+        # Remarks ride along on the description because that is the field the Sales
+        # Invoice copies, so a note agreed at enquiry time reaches the guest's bill.
+        "description": _room_charge_description(res),
         "qty": 1,
         "amount": base_amount,
         "bill_to": bill_to
@@ -321,6 +372,25 @@ def post_room_charge(res, base_amount, date):
 
     # Sync Balance
     sync_folio_balance(frappe.get_doc("Guest Folio", folio_name))
+
+def _room_charge_description(res):
+    """Folio line text for a room charge, including anything noted about the stay."""
+    parts = [f"Room Charge - {res.room}"]
+
+    beds = cint(res.get("extra_beds_adult")) + cint(res.get("extra_beds_child"))
+    if beds:
+        detail = []
+        if cint(res.get("extra_beds_adult")):
+            detail.append(f"{cint(res.extra_beds_adult)} adult")
+        if cint(res.get("extra_beds_child")):
+            detail.append(f"{cint(res.extra_beds_child)} child")
+        parts.append("incl. {0} extra bed(s): {1}".format(beds, ", ".join(detail)))
+
+    if res.get("remarks"):
+        parts.append(str(res.remarks).strip())
+
+    return " | ".join(parts)
+
 
 def ensure_item_exists(code, name):
     if not frappe.db.exists("Item", code):

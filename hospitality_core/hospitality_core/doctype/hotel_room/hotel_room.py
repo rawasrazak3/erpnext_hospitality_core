@@ -34,6 +34,42 @@ def blocked_reason(room, status):
 	return BLOCKED_STATUS_REASON.get(status, _("Room {0} is unavailable.")).format(room)
 
 
+def current_occupant(room, exclude=None):
+	"""The checked-in guest in this room today, or None.
+
+	A guest due out today still counts (they are there until check-out time). One still
+	marked Checked In after their departure date does not: their booked nights are over,
+	and the room already belongs to whoever comes next.
+	"""
+	filters = {
+		"room": room,
+		"status": "Checked In",
+		"departure_date": [">=", frappe.utils.nowdate()],
+	}
+	if exclude:
+		filters["name"] = ["!=", exclude]
+	return frappe.db.get_value("Hotel Reservation", filters, ["name", "guest"], as_dict=True)
+
+
+def refresh_room_status(room, exclude=None):
+	"""Set a room Occupied or Available from the stays actually in it.
+
+	Called wherever a guest arrives, leaves or moves. Setting "Available" outright on
+	check-out was wrong once rooms could be re-let before a forgotten guest was
+	checked out: checking that guest out later would mark the new guest's room empty.
+	Maintenance and Out of Order are left alone.
+	"""
+	if not room or not frappe.db.exists("Hotel Room", room):
+		return None
+	status = frappe.db.get_value("Hotel Room", room, "status")
+	if status in BLOCKED_STATUSES:
+		return status
+	new_status = "Occupied" if current_occupant(room, exclude=exclude) else "Available"
+	if new_status != status:
+		frappe.db.set_value("Hotel Room", room, "status", new_status)
+	return new_status
+
+
 class HotelRoom(Document):
 	def validate(self):
 		self.guard_blocking_status()
@@ -49,12 +85,7 @@ class HotelRoom(Document):
 		if previous and previous.status == self.status:
 			return
 
-		occupant = frappe.db.get_value(
-			"Hotel Reservation",
-			{"room": self.name, "status": "Checked In"},
-			["name", "guest"],
-			as_dict=True,
-		)
+		occupant = current_occupant(self.name)
 		if occupant:
 			frappe.throw(
 				_("Room {0} cannot be set to {1}: {2} is checked in on {3}. "

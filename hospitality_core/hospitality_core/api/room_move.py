@@ -27,25 +27,27 @@ def process_room_move(reservation_name, new_room):
     old_room = res.room
     new_room_type = frappe.db.get_value("Hotel Room", new_room, "room_type")
 
-    # 1. Validate Availability (for the remaining dates)
-    # We check from Today to Departure Date
-    check_availability(new_room, frappe.utils.nowdate(), res.departure_date, ignore_reservation=res.name)
+    # 1. The new room must be free for the remaining nights (at least tonight, even for
+    # a guest past their departure).
+    today = frappe.utils.getdate(frappe.utils.nowdate())
+    end = max(frappe.utils.getdate(res.departure_date), frappe.utils.getdate(frappe.utils.add_days(today, 1)))
+    check_availability(new_room, today, end, ignore_reservation=res.name,
+                       ignore_booking=res.get("hotel_booking"))
 
-    # 2. Update Statuses
-    # Old Room -> Available (housekeeping can manually mark Dirty if needed)
-    frappe.db.set_value("Hotel Room", old_room, "status", "Available")
-    
-    # New Room -> Occupied
-    frappe.db.set_value("Hotel Room", new_room, "status", "Occupied")
-
-    # 3. Update Documents (Bypass set_only_once restriction)
+    # 2. Update Documents (Bypass set_only_once restriction)
     res.db_set("room", new_room)
+
     if new_room_type and res.room_type != new_room_type:
         res.db_set("room_type", new_room_type)
     
     # Update Folio
     if res.folio:
         frappe.db.set_value("Guest Folio", res.folio, "room", new_room)
+
+    # 3. Room statuses from who is actually in each room now.
+    from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import refresh_room_status
+    refresh_room_status(old_room)
+    refresh_room_status(new_room)
 
     # 4. Log the Move (Optional: Add a comment)
     res.add_comment("Info", _("Moved from Room {0} to Room {1} on {2}").format(

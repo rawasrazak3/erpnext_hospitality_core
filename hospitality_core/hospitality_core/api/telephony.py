@@ -11,11 +11,18 @@ Nothing here changes crm_mobile_sync or the Android app.
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import cint, now_datetime
 
 # India: compare the last 10 digits, which survives +91 / 0 / spacing differences
 # between what the handset reports and what a sales user types. Change to 8 for GCC.
 MATCH_DIGITS = 10
+
+# Statuses CRM Call Log uses for a call that never connected. ingest_calls maps Android's
+# MISSED/REJECTED/BLOCKED to "No Answer", and also rewrites a "Completed" call of zero
+# seconds to "No Answer", so this one value covers every unanswered case the app produces.
+# Lives here rather than in a report because the reports and the Call History console all
+# have to agree on what "unanswered" means.
+UNANSWERED_STATUSES = ("No Answer", "Missed", "Busy", "Failed")
 
 
 def match_key(number):
@@ -213,11 +220,27 @@ def create_enquiry_from_call(call_log, guest_name=None, source=None):
 
 
 def _default_source(call):
-    """WhatsApp calls are tagged by the sync app; everything else is a phone call."""
+    """WhatsApp calls are tagged by the sync app; everything else is a phone call.
+
+    Source is mandatory on Hotel Enquiry, so this must always return something: a call
+    that reached the hotel is a real lead, and losing it because a master row was
+    renamed would be worse than attributing it to the wrong channel. Falls back to any
+    active source, then to creating "Phone Call".
+    """
     channel = call.get("custom_channel")
     if channel == "WhatsApp" and frappe.db.exists("Hotel Enquiry Source", "WhatsApp"):
         return "WhatsApp"
-    return "Phone Call" if frappe.db.exists("Hotel Enquiry Source", "Phone Call") else None
+    if frappe.db.exists("Hotel Enquiry Source", "Phone Call"):
+        return "Phone Call"
+
+    fallback = frappe.db.get_value("Hotel Enquiry Source", {"is_active": 1}, "name") \
+        or frappe.db.get_value("Hotel Enquiry Source", {}, "name")
+    if fallback:
+        return fallback
+
+    return frappe.get_doc({
+        "doctype": "Hotel Enquiry Source", "source_name": "Phone Call", "is_active": 1
+    }).insert(ignore_permissions=True).name
 
 
 def backfill_call_keys(batch=5000):
@@ -268,3 +291,131 @@ def backfill_call_keys(batch=5000):
     )[0][0]
     print(f"keyed {keyed} call log(s); {linked_count} now linked to an enquiry")
     return keyed, linked_count
+
+
+# --- Handset / medium resolution ----------------------------------------------------
+#
+# "Which of our numbers did this call go through?" The answer lives in three places
+# depending on how the call was recorded, so the reports share one expression rather
+# than each guessing:
+#
+#   1. CRM Call Log.medium  -- crm_mobile_sync writes the handset's own SIM number here,
+#      and the Twilio/Exotel handlers write the provider line. Preferred when set.
+#   2. CRM Device.phone_number via custom_device -- covers rows ingested before the
+#      medium write was added, since the device record still knows its number.
+#   3. Our side of the call itself -- `from` on an outgoing call, `to` on an incoming
+#      one. Always present, because both are reqd=1, so no row is left without a line.
+
+
+def handset_sql(call_alias="cl", device_alias="dev"):
+    """(join, number_expr, label_expr) for the line a call went through.
+
+    `join` is "" when CRM Device is not linked on the call log, so callers can drop it
+    into a query unconditionally.
+    """
+    meta = frappe.get_meta("CRM Call Log")
+    join = ""
+    label_expr = "NULL"
+    parts = []
+
+    if meta.has_field("medium"):
+        parts.append(f"NULLIF({call_alias}.medium, '')")
+
+    if meta.has_field("custom_device") and frappe.db.exists("DocType", "CRM Device"):
+        join = (
+            f"LEFT JOIN `tabCRM Device` {device_alias} "
+            f"ON {device_alias}.name = {call_alias}.custom_device"
+        )
+        parts.append(f"NULLIF({device_alias}.phone_number, '')")
+        label_expr = (
+            f"COALESCE(NULLIF({device_alias}.device_label, ''), "
+            f"NULLIF({device_alias}.model, ''), {call_alias}.custom_device)"
+        )
+
+    parts.append(
+        f"NULLIF(CASE WHEN {call_alias}.type = 'Outgoing' "
+        f"THEN {call_alias}.`from` ELSE {call_alias}.`to` END, '')"
+    )
+
+    return join, f"COALESCE({', '.join(parts)})", label_expr
+
+
+@frappe.whitelist()
+def get_handset_numbers(doctype=None, txt=None, searchfield=None, start=0,
+                        page_len=50, filters=None):
+    """Handset numbers for the report filters, labelled with the handset they belong to.
+
+    Two sources, merged. CRM Device is the register of handsets and is what a manager
+    recognises — "vivo V2432" rather than 8593877773 — so every registered device lists,
+    including one that has not called yet. The call log is then the authority on which
+    numbers actually appear in the reports, which is how a retired handset's number and
+    a provider line with no CRM Device behind it still make the list.
+
+    `txt` matches the number or the label, so typing "vivo" finds the same row as "8593".
+
+    The signature matches frappe's link-query convention, so this can serve a
+    MultiSelectList and a Link query without a wrapper.
+    """
+    if not frappe.has_permission("CRM Call Log", "read"):
+        frappe.throw(_("Not permitted to read call logs"), frappe.PermissionError)
+
+    page_len = cint(page_len) or 50
+    needle = (txt or "").strip().lower()
+
+    # Registered handsets first: number -> the name a manager would use for it.
+    devices = {}
+    if frappe.db.exists("DocType", "CRM Device"):
+        for dev in frappe.get_all(
+            "CRM Device",
+            fields=["phone_number", "device_label", "model", "status"],
+            limit_page_length=0,
+        ):
+            number = (dev.phone_number or "").strip()
+            if not number:
+                continue
+            label = dev.device_label or dev.model or _("Handset")
+            if dev.status == "Retired":
+                label = _("{0} (retired)").format(label)
+            devices.setdefault(number, label)
+
+    join, number_expr, _label_expr = handset_sql()
+    seen = frappe.db.sql(
+        f"""
+        SELECT {number_expr} AS number, COUNT(*) AS calls
+        FROM `tabCRM Call Log` cl
+        {join}
+        WHERE IFNULL({number_expr}, '') != ''
+        GROUP BY {number_expr}
+        ORDER BY calls DESC
+        """,
+        as_dict=True,
+    )
+
+    # MultiSelectList renders `description` beside the value. Numbers that carry calls
+    # come first and in volume order, because that is the order a manager looks in;
+    # registered handsets with nothing in the log follow, so a silent one is still
+    # selectable rather than simply missing.
+    out, listed = [], set()
+    for row in seen:
+        number = (row.number or "").strip()
+        if not number or number in listed:
+            continue
+        listed.add(number)
+        label = devices.get(number)
+        out.append({
+            "value": number,
+            "description": (
+                _("{0} — {1} calls").format(label, row.calls) if label
+                else _("{0} calls").format(row.calls)
+            ),
+        })
+
+    for number, label in devices.items():
+        if number not in listed:
+            out.append({"value": number, "description": _("{0} — no calls yet").format(label)})
+
+    if needle:
+        out = [o for o in out
+               if needle in o["value"].lower() or needle in o["description"].lower()]
+
+    return out[:page_len]

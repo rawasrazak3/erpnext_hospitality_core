@@ -33,6 +33,13 @@
   "room_details_preview",
   "sec_money",
   "total_amount",
+  "sec_discount",
+  "total_before_discount",
+  "discount_type",
+  "discount_value",
+  "col_break_discount",
+  "discount_amount",
+  "remarks",
   "advance_required",
   "col_break_money",
   "advance_received",
@@ -190,7 +197,8 @@
    "fieldname": "total_amount",
    "fieldtype": "Currency",
    "label": "Total",
-   "read_only": 1
+   "read_only": 1,
+   "description": "Subtotal less the discount. This is what the guest pays."
   },
   {
    "fieldname": "advance_required",
@@ -279,11 +287,52 @@
    "label": "Extra Beds (Child)",
    "default": "0",
    "description": "Beds beyond the room's Max Allowed. Charged per night."
+  },
+  {
+   "fieldname": "sec_discount",
+   "fieldtype": "Section Break",
+   "label": "Discount & Remarks"
+  },
+  {
+   "fieldname": "total_before_discount",
+   "fieldtype": "Currency",
+   "label": "Subtotal",
+   "read_only": 1,
+   "description": "Rooms plus extra beds, before discount."
+  },
+  {
+   "fieldname": "discount_type",
+   "fieldtype": "Select",
+   "label": "Discount Type",
+   "options": "\nAmount\nPercentage"
+  },
+  {
+   "fieldname": "discount_value",
+   "fieldtype": "Float",
+   "label": "Discount Value",
+   "depends_on": "discount_type",
+   "description": "A flat amount off the whole booking, or a percentage of it."
+  },
+  {
+   "fieldname": "col_break_discount",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "discount_amount",
+   "fieldtype": "Currency",
+   "label": "Discount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "description": "Carried to every reservation, onto the folio and the guest's bill."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-11 12:00:00.000000",
+ "modified": "2026-09-16 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hotel Booking",

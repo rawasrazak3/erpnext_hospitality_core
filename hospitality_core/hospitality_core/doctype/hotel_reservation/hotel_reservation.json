@@ -25,9 +25,12 @@
   "passport_number",
   "section_break_financial",
   "rate_plan",
+  "is_rate_overridden",
+  "agreed_rate",
   "is_complimentary",
   "discount_type",
   "discount_value",
+  "remarks",
   "room_rate_preview",
   "is_company_guest",
   "company",
@@ -333,11 +336,30 @@
    "label": "Extra Beds (Child)",
    "default": "0",
    "description": "Beds beyond the room's Max Allowed. Charged per night."
+  },
+  {
+   "fieldname": "agreed_rate",
+   "fieldtype": "Currency",
+   "label": "Agreed Rate / Night",
+   "description": "The nightly rate agreed with the guest. When set, it replaces the room type's tariff for every night of this stay."
+  },
+  {
+   "fieldname": "is_rate_overridden",
+   "fieldtype": "Check",
+   "label": "Rate Agreed Manually",
+   "read_only": 1,
+   "description": "Carried from the enquiry or booking where the rate was agreed."
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "description": "Shown on the folio and carried onto the guest's bill."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-11 12:00:00.000000",
+ "modified": "2026-09-16 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hotel Reservation",

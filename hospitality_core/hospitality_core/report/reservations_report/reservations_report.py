@@ -41,10 +41,10 @@ def get_data(filters):
         # Reservations departing on selected date
         conditions.append("res.departure_date = %(target_date)s")
     elif view_mode == "In-House":
-        # All guests in-house on selected date (using datetime comparison with standard times)
-        conditions.append("CAST(CONCAT(res.arrival_date, ' ', IFNULL(NULLIF(res.arrival_time, ''), '14:00:00')) AS DATETIME) <= %(check_dt)s")
-        conditions.append("CAST(CONCAT(res.departure_date, ' ', IFNULL(NULLIF(res.departure_time, ''), '12:00:00')) AS DATETIME) > %(check_dt)s")
-        params["check_dt"] = f"{target_date} 14:00:00"
+        # All guests in-house on selected date (booked nights include the date; times play no part)
+        conditions.append("res.arrival_date <= %(check_dt)s")
+        conditions.append("res.departure_date > %(check_dt)s")
+        params["check_dt"] = target_date
     else:
         # Default: arrivals
         conditions.append("res.arrival_date = %(target_date)s")

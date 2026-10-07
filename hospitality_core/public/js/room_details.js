@@ -92,7 +92,7 @@ frappe.hospitality.room_details = {
 			)}</b></div>`,
 			t.has_weekend_premium
 				? `<div class="hc-rate hc-rate-wknd" title="${__(
-						'Charged on Saturday, Sunday and holiday nights'
+						'Charged on Friday, Saturday, Sunday and holiday nights'
 				  )}"><span>${__('Weekend/Holiday')}</span><b>${money(
 						t.weekend_rate
 				  )}</b></div>`

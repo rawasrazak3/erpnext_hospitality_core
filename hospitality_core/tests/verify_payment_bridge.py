@@ -55,7 +55,8 @@ def _run():
     check("advance liability account set", settings.advance_liability_account, settings.advance_liability_account)
     check(
         "check-in time is a clock time",
-        str(settings.standard_check_in_time) == "14:00:00",
+        # Whatever the property chose (it has been 14:00 and 16:00); it must parse.
+        bool(settings.standard_check_in_time) and bool(frappe.utils.get_time(settings.standard_check_in_time)),
         settings.standard_check_in_time,
     )
 

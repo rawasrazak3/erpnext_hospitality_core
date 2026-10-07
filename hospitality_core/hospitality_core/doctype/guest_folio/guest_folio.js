@@ -40,11 +40,20 @@ frappe.ui.form.on('Guest Folio', {
             }, 'Actions');
         }
 
-        // Button: Create Invoice
-        if (frm.doc.status !== 'Provisional') {
+        // Button: Print Bill — the guest's running bill, any time.
+        if (!frm.is_new()) {
+            frm.add_custom_button(__('Print Bill'), function () {
+                frappe.hospitality.stay.print_bill(frm.doc.name);
+            });
+        }
+
+        // Button: Create Invoice. Check-out raises the invoice automatically; this is for
+        // a check-out whose invoice failed, or charges posted after it. Not offered on
+        // advance or city-ledger folios, whose money is invoiced elsewhere.
+        if (frm.doc.status !== 'Provisional' && !frm.doc.is_booking_master && !frm.doc.is_company_master) {
             frm.add_custom_button(__('Create Invoice'), function () {
                 frappe.confirm(
-                    'Create Sales Invoice for all unbilled items?',
+                    __('Create and submit a GST Sales Invoice for every charge on this folio not yet invoiced? Payments made for this stay are allocated against it.'),
                     function () {
                         frm.call({
                             method: 'hospitality_core.hospitality_core.api.invoicing.create_invoice_from_folio',

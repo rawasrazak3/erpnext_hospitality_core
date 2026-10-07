@@ -11,12 +11,14 @@ app_include_js = [
     "/assets/hospitality_core/js/pos_invoice_auto_print.js",
     "/assets/hospitality_core/js/payment_entry_auto_print.js",
     "/assets/hospitality_core/js/pos_payment_control.js",
-    "/assets/hospitality_core/js/room_details.js"
+    "/assets/hospitality_core/js/room_details.js",
+    "/assets/hospitality_core/js/front_desk.js"
 ]
 
 app_include_css = [
     "/assets/hospitality_core/css/print_format.css",
-    "/assets/hospitality_core/css/room_details.css"
+    "/assets/hospitality_core/css/room_details.css",
+    "/assets/hospitality_core/css/front_desk.css"
 ]
 
 
@@ -39,11 +41,12 @@ doc_events = {
     "Guest Folio": {
         "on_update": "hospitality_core.hospitality_core.api.folio.sync_folio_balance"
     },
+    # Folio Transaction is a child table and "after_save" is not a Frappe event, so this
+    # never ran — every caller syncs the balance itself. The GL posting that used to sit
+    # here (accounting.make_gl_entries_for_folio_transaction) is deliberately gone: a
+    # stay's revenue and GST are booked by the Sales Invoice made at check-out
+    # (api/invoicing.py), and posting them from the folio as well would count them twice.
     "Folio Transaction": {
-        "after_save": [
-            "hospitality_core.hospitality_core.api.folio.sync_folio_balance",
-            "hospitality_core.hospitality_core.api.accounting.make_gl_entries_for_folio_transaction"
-        ],
         "on_trash": "hospitality_core.hospitality_core.api.folio.sync_folio_balance"
     },
     "POS Invoice": {
@@ -72,7 +75,10 @@ doc_events = {
     },
     "Sales Invoice": {
         "before_submit": "hospitality_core.hospitality_core.api.stock.disable_stock_for_consolidated_pos_sales_invoice",
-        "on_submit": "hospitality_core.api.composite_item_utils.process_composite_items_in_invoice",
+        "on_submit": [
+            "hospitality_core.api.composite_item_utils.process_composite_items_in_invoice",
+            "hospitality_core.hospitality_core.api.invoicing.settle_parked_advances"
+        ],
         "on_cancel": [
             "hospitality_core.api.composite_item_utils.process_composite_items_in_invoice",
             "hospitality_core.hospitality_core.api.invoicing.cancel_sales_invoice"
@@ -88,8 +94,9 @@ after_install = "hospitality_core.setup.after_install"
 
 # Custom fields are declared once in setup.CUSTOM_FIELDS and re-synced on every migrate,
 # so adding a field there is all that is needed — no patch per batch. create_custom_fields
-# is idempotent, so this is safe to run repeatedly.
-after_migrate = "hospitality_core.setup.setup_custom_fields"
+# is idempotent, so this is safe to run repeatedly. after_migrate also re-applies the
+# single-workspace sidebar on sites that opted in (setup.apply_single_workspace).
+after_migrate = "hospitality_core.setup.after_migrate"
 
 # Scheduled Tasks
 # changed daily audit to run at 2 PM (14:00) per requirements
@@ -105,6 +112,11 @@ scheduler_events = {
         # hold that has lapsed is inventory the sales team cannot sell until it clears.
         "0 * * * *": [
             "hospitality_core.hospitality_core.doctype.hotel_booking.hotel_booking.release_expired_holds"
+        ],
+        # Close the paperwork on stays whose check-out time has passed and that owe
+        # nothing. Rooms are already free at that point; this never charges anything.
+        "10 * * * *": [
+            "hospitality_core.hospitality_core.api.front_desk.auto_check_out"
         ]
     }
 }

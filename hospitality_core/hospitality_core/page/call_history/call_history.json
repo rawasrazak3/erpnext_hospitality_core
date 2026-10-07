@@ -1,0 +1,38 @@
+{
+ "content": null,
+ "creation": "2026-09-17 09:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-09-17 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hospitality Core",
+ "name": "call-history",
+ "owner": "Administrator",
+ "page_name": "call-history",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Sales Manager"
+  },
+  {
+   "role": "Sales User"
+  },
+  {
+   "role": "Hospitality Manager"
+  },
+  {
+   "role": "Hospitality User"
+  },
+  {
+   "role": "Hotel Sales Agent"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Call History"
+}

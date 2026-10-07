@@ -87,10 +87,13 @@ function draw_grid(data, start, end) {
             );
 
             if (booking) {
-                let color = booking.status === 'Checked In' ? '#d4edda' : '#fff3cd'; // Green vs Yellow
+                // Green: in house. Yellow: reserved. Blue: held on a booking, no reservation yet.
+                const is_hold = booking.doctype === 'Hotel Booking';
+                let color = booking.status === 'Checked In' ? '#d4edda' : (is_hold ? '#dbeafe' : '#fff3cd');
+                const doctype = is_hold ? 'Hotel Booking' : 'Hotel Reservation';
                 html += `<td style="background-color: ${color}; text-align: center; vertical-align: middle; cursor: pointer;" 
-                            title="${booking.guest} (${booking.status})"
-                            onclick="frappe.set_route('Form', 'Hotel Reservation', '${booking.name}')">
+                            title="${frappe.utils.escape_html(booking.guest || '')} (${booking.status})"
+                            onclick="frappe.set_route('Form', '${doctype}', '${booking.name}')">
                             ${booking.name.split('-').pop()}
                          </td>`;
             } else {

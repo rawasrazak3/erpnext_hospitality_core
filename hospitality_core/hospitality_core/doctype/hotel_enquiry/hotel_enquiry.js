@@ -232,7 +232,7 @@ frappe.ui.form.on("Enquiry Room Line", {
 			.then((q) => {
 				if (!row.rate_quoted) {
 					if (q) {
-						frappe.model.set_value(cdt, cdn, "rate_quoted", q.average_nightly);
+						frappe.model.set_value(cdt, cdn, "rate_quoted", q.average_room_nightly);
 					} else {
 						frappe.db
 							.get_value("Hotel Room Type", row.room_type, "default_rate")

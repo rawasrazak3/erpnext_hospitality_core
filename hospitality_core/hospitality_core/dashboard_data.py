@@ -49,10 +49,10 @@ def get_occupancy_rate_trend(from_date, to_date):
 		occ_count = frappe.db.sql("""
 			SELECT COUNT(*) 
 			FROM `tabHotel Reservation` 
-			WHERE CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= %s
-			AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
+			WHERE arrival_date <= %s
+			AND departure_date > %s
 			AND status NOT IN ('Cancelled', 'No Show')
-		""", (f"{d_str} 14:00:00", f"{d_str} 14:00:00"))[0][0]
+		""", (d_str, d_str))[0][0]
 		
 		dates.append(d_str)
 		values.append(round((flt(occ_count) / total_rooms) * 100.0, 2))
@@ -79,10 +79,10 @@ def get_adr_trend(from_date, to_date):
 		# Occupied rooms for the day
 		occ_count = frappe.db.sql("""
 			SELECT COUNT(*) FROM `tabHotel Reservation`
-			WHERE CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= %s
-			AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
+			WHERE arrival_date <= %s
+			AND departure_date > %s
 			AND status NOT IN ('Cancelled', 'No Show')
-		""", (f"{d_str} 14:00:00", f"{d_str} 14:00:00"))[0][0] or 0
+		""", (d_str, d_str))[0][0] or 0
 		
 		dates.append(d_str)
 		values.append(round(flt(rev) / occ_count, 2) if occ_count > 0 else 0)
@@ -250,10 +250,10 @@ def get_today_occupancy():
 	d_str = nowdate()
 	occ_count = frappe.db.sql("""
 		SELECT COUNT(*) FROM `tabHotel Reservation` 
-		WHERE CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) <= %s
-		AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
+		WHERE arrival_date <= %s
+		AND departure_date > %s
 		AND status NOT IN ('Cancelled', 'No Show')
-	""", (f"{d_str} 14:00:00", f"{d_str} 14:00:00"))[0][0] or 0
+	""", (d_str, d_str))[0][0] or 0
 	return round((flt(occ_count) / total_rooms) * 100.0, 2)
 
 @frappe.whitelist()

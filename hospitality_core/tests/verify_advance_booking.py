@@ -201,17 +201,16 @@ def _run():
           frappe.db.exists("Folio Transaction Move Log",
                            {"source_folio": booking.booking_folio, "target_folio": room_folio.name}))
 
-    print("\n9. Advance is released into income only now")
+    print("\n9. Applying the advance posts no revenue; the check-out invoice does that")
     released = frappe.get_all(
         "GL Entry",
         filters={"voucher_type": "Hotel Booking", "voucher_no": booking.name},
         fields=["account", "debit", "credit"],
     )
-    rel = {g.account: g for g in released}
-    check("liability debited on application",
-          flt(rel.get(settings.advance_liability_account, {}).get("debit")) == 10000, rel)
-    check("income suspense credited",
-          flt(rel.get(settings.income_suspense_account, {}).get("credit")) == 10000, rel)
+    # Revenue is recognised once, by the Sales Invoice raised at check-out, which also
+    # releases the parked advance (see verify_guest_journey). Moving it into income
+    # suspense here as well is what used to leave suspense uncleared.
+    check("no GL posted on application", not released, released)
 
     print("\n10. Overbooking is refused")
     clash = frappe.get_doc({

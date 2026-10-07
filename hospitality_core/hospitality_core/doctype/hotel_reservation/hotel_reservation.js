@@ -37,70 +37,28 @@ frappe.ui.form.on('Hotel Reservation', {
         // Add Workflow Buttons
         if (!frm.is_new()) {
 
-            // CHECK IN BUTTON
+            // CHECK IN — one dialog: ID, the stay's price night by night, the advance
+            // that will be applied, and an optional payment.
             if (frm.doc.status === 'Reserved') {
                 frm.add_custom_button(__('Check In'), function () {
-                    frappe.confirm(
-                        'Are you sure you want to Check In this guest?',
-                        function () {
-                            frm.call({
-                                method: 'check_in_guest',
-                                args: {
-                                    name: frm.doc.name
-                                },
-                                freeze: true,
-                                callback: function (r) {
-                                    if (!r.exc) {
-                                        frappe.msgprint('Guest Checked In Successfully');
-                                        frm.reload_doc();
-                                    }
-                                }
-                            });
-                        }
-                    );
+                    frappe.hospitality.stay.check_in(frm.doc.name, {
+                        on_done: () => frm.reload_doc(),
+                    });
                 }).addClass("btn-primary");
             }
 
-            // NEW CHECK OUT BUTTON (Primary Action)
+            // CHECK OUT — shows the bill, applies any advance still on the booking,
+            // takes the balance, closes the folio and raises the Sales Invoice.
+            // An early departure is allowed: the server shortens the stay to today.
             if (frm.doc.status === 'Checked In') {
                 frm.page.set_primary_action(__('Check Out'), function () {
-                    // Pre-check Departure Date
-                    if (frm.doc.departure_date !== frappe.datetime.nowdate()) {
-                        frappe.msgprint({
-                            title: __('Early Departure?'),
-                            message: __('Cannot Check Out. The Departure Date must be today. Please update the Departure Date/Shorten Stay first.'),
-                            indicator: 'orange'
-                        });
-                        return;
-                    }
-
-                    // Nice Confirmation Dialog
-                    frappe.warn(
-                        'Confirm Checkout',
-                        `Are you sure you want to Check Out <b>${frm.doc.guest}</b> from Room <b>${frm.doc.room}</b>?<br><br>This will close the folio and mark the room as Available.`,
-                        function () {
-                            frm.call({
-                                method: 'check_out_guest',
-                                args: {
-                                    name: frm.doc.name
-                                },
-                                freeze: true,
-                                freeze_message: __('Processing Checkout...'),
-                                callback: function (r) {
-                                    if (!r.exc) {
-                                        frappe.show_alert({
-                                            message: __('Guest Checked Out Successfully'),
-                                            indicator: 'green'
-                                        });
-                                        frm.reload_doc();
-                                        // Check-out is the moment the guest will answer, so ask now.
-                                        prompt_feedback_whatsapp(frm);
-                                    }
-                                }
-                            });
+                    frappe.hospitality.stay.check_out(frm.doc.name, {
+                        on_done: () => {
+                            frm.reload_doc();
+                            // Check-out is the moment the guest will answer, so ask now.
+                            prompt_feedback_whatsapp(frm);
                         },
-                        'Check Out'
-                    );
+                    });
                 });
             }
 
@@ -110,7 +68,10 @@ frappe.ui.form.on('Hotel Reservation', {
                 frappe.user_roles.includes('System Manager') ||
                 frappe.session.user === 'Administrator';
 
-            if (['Reserved', 'Checked In'].includes(frm.doc.status) && is_supervisor) {
+            // A stay not yet checked in is cancelled with Stay › Cancel Stay (which also
+            // handles a kept cancellation charge); this is the supervisor's override for
+            // a guest already in house.
+            if (frm.doc.status === 'Checked In' && is_supervisor) {
                 frm.add_custom_button(__('Cancel Reservation'), function () {
                     frappe.confirm(
                         'Are you sure you want to Cancel this Reservation?',
@@ -151,55 +112,46 @@ frappe.ui.form.on('Hotel Reservation', {
 
         set_reservation_read_only_state(frm);
 
+        // Stays always run from the standard check-in to the standard check-out time
+        // (Hospitality Accounting Settings) and rooms are allocated by night, so the
+        // times are shown, not typed.
+        ['arrival_time', 'departure_time'].forEach((f) => {
+            frm.set_df_property(f, 'read_only', 1);
+            frm.set_df_property(f, 'description', __('From Hospitality Accounting Settings'));
+        });
+
         // ROOM MOVE BUTTON
         // Extend Stay — the planned counterpart to the night audit's overstay handler,
         // which only fires at 2 PM and cannot be used to agree an extra night at the desk.
-        if (['Reserved', 'Checked In'].includes(frm.doc.status)) {
-            frm.add_custom_button(__('Extend Stay'), function () {
-                const d = new frappe.ui.Dialog({
-                    title: __('Extend Stay'),
-                    fields: [
-                        {
-                            fieldname: 'current',
-                            fieldtype: 'HTML',
-                            options: `<p class="text-muted small">${__('Currently departing {0}.', [
-                                frappe.datetime.str_to_user(frm.doc.departure_date),
-                            ])}</p>`,
-                        },
-                        {
-                            label: __('New Departure Date'),
-                            fieldname: 'new_departure_date',
-                            fieldtype: 'Date',
-                            reqd: 1,
-                            default: frappe.datetime.add_days(frm.doc.departure_date, 1),
-                        },
-                    ],
-                    primary_action_label: __('Extend'),
-                    primary_action: function (values) {
-                        d.hide();
-                        frm.call({
-                            method: 'hospitality_core.hospitality_core.doctype.hotel_reservation.hotel_reservation.extend_stay',
-                            args: {
-                                reservation: frm.doc.name,
-                                new_departure_date: values.new_departure_date,
-                            },
-                            freeze: true,
-                            callback: function (r) {
-                                if (r.message) {
-                                    frappe.show_alert({
-                                        message: __('Stay extended to {0}', [
-                                            frappe.datetime.str_to_user(r.message.departure_date),
-                                        ]),
-                                        indicator: 'green',
-                                    });
-                                }
-                                frm.reload_doc();
-                            },
-                        });
-                    },
-                });
-                d.show();
-            });
+        if (!frm.is_new() && ['Reserved', 'Checked In', 'No Show'].includes(frm.doc.status)) {
+            const stay = frappe.hospitality.stay;
+            const done = { on_done: () => frm.reload_doc() };
+            const in_house = frm.doc.status === 'Checked In';
+            frm.add_custom_button(in_house ? __('Extend / Change Dates') : __('Change Dates'),
+                () => stay.change_dates(frm.doc.name, Object.assign({ extend: in_house }, done)), __('Stay'));
+            frm.add_custom_button(__('Take Payment'), () => stay.take_payment(frm.doc.name, done), __('Stay'));
+            if (in_house) {
+                frm.add_custom_button(__('Add Charge'), () => stay.add_charge(frm.doc.name, done), __('Stay'));
+            }
+            if (frm.doc.status !== 'No Show') {
+                frm.add_custom_button(__('Move Room'), () => stay.move_room(frm.doc.name, done), __('Stay'));
+            }
+            if (!in_house) {
+                frm.add_custom_button(__('Cancel Stay'), () => stay.cancel(frm.doc.name, done), __('Stay'));
+            }
+        }
+
+        if (!frm.is_new()) {
+            frm.add_custom_button(__('Open in Front Desk'), function () {
+                frappe.route_options = { reservation: frm.doc.name };
+                frappe.set_route('hotel-pos');
+            }, 'View');
+        }
+
+        if (frm.doc.folio && !frm.is_new()) {
+            frm.add_custom_button(__('Print Bill'), function () {
+                frappe.hospitality.stay.print_bill(frm.doc.folio);
+            }, 'View');
         }
 
         if (frm.doc.hotel_booking) {
@@ -208,53 +160,6 @@ frappe.ui.form.on('Hotel Reservation', {
             });
         }
 
-        let can_move_room = frappe.user_roles.includes('Frontdesk Supervisor') ||
-            frappe.session.user === 'Administrator';
-
-        if (frm.doc.status === 'Checked In' && can_move_room) {
-            frm.add_custom_button(__('Move Room'), function () {
-
-                var d = new frappe.ui.Dialog({
-                    title: 'Move Guest to New Room',
-                    fields: [
-                        {
-                            label: 'New Room',
-                            fieldname: 'new_room',
-                            fieldtype: 'Link',
-                            options: 'Hotel Room',
-                            get_query: function () {
-                                return {
-                                    filters: {
-                                        'is_enabled': 1,
-                                        'name': ['!=', frm.doc.room]
-                                    }
-                                };
-                            },
-                            reqd: 1
-                        }
-                    ],
-                    primary_action_label: 'Move',
-                    primary_action: function (values) {
-                        frm.call({
-                            method: 'hospitality_core.hospitality_core.api.room_move.process_room_move',
-                            args: {
-                                reservation_name: frm.doc.name,
-                                new_room: values.new_room
-                            },
-                            freeze: true,
-                            callback: function (r) {
-                                if (!r.exc) {
-                                    d.hide();
-                                    frm.reload_doc();
-                                }
-                            }
-                        });
-                    }
-                });
-                d.show();
-
-            }, __('Actions'));
-        }
     },
 
     room_type: function (frm) {
@@ -293,6 +198,13 @@ frappe.ui.form.on('Hotel Reservation', {
 
     children: function (frm) {
         render_room_details(frm);
+    },
+
+    agreed_rate: function (frm) {
+        // Typing a rate here is an agreement with the guest: flag it so the night audit
+        // bills this figure instead of the room type's tariff.
+        frm.set_value('is_rate_overridden', flt(frm.doc.agreed_rate) ? 1 : 0);
+        render_room_rate_preview(frm);
     },
 
     extra_beds_adult: function (frm) {
@@ -338,14 +250,31 @@ function render_room_details(frm) {
 
         let html = frappe.hospitality.room_details.card(t);
 
-        // Flag a party that does not fit before it becomes a problem at check-in.
+        // Over capacity is sold with extra beds, so show what is needed and what it
+        // costs rather than treating it as an error.
         const guests = cint(frm.doc.adults) + cint(frm.doc.children);
         const beds = cint(frm.doc.extra_beds_adult) + cint(frm.doc.extra_beds_child);
         const cap = cint(t && t.max_occupancy);
+
         if (cap && guests > cap + beds) {
-            html += `<div class="hc-warn">&#9888; ${__(
-                '{0} guests exceed the {1} this room allows. Add {2} extra bed(s).',
-                [guests, cap, guests - cap - beds]
+            const short = guests - cap - beds;
+            const cost =
+                short * flt(t.extra_bed_adult_rate) * Math.max(frm.doc.nights || 1, 1);
+            html += `<div class="hc-quote-note">🛏 ${__(
+                '{0} guest(s) over the {1} this room sleeps. Add {0} extra bed(s) — about {2} for the stay.',
+                [short, cap, format_currency(cost)]
+            )}</div>`;
+        } else if (beds) {
+            html += `<div class="hc-quote-note">🛏 ${__(
+                '{0} extra bed(s) on this reservation, charged every night.',
+                [beds]
+            )}</div>`;
+        }
+
+        if (cint(frm.doc.is_rate_overridden) && flt(frm.doc.agreed_rate)) {
+            html += `<div class="hc-quote-note">${__(
+                'Agreed rate of {0} per night — the tariff does not apply to this stay.',
+                [format_currency(frm.doc.agreed_rate)]
             )}</div>`;
         }
 
@@ -420,7 +349,13 @@ function render_room_rate_preview(frm) {
             arrival_date: frm.doc.arrival_date,
             discount_type: frm.doc.discount_type,
             discount_value: frm.doc.discount_value,
-            is_complimentary: frm.doc.is_complimentary
+            is_complimentary: frm.doc.is_complimentary,
+            // Extra beds and an agreed rate both change what the night audit will post,
+            // so the preview has to account for them or it contradicts the folio.
+            extra_beds_adult: frm.doc.extra_beds_adult || 0,
+            extra_beds_child: frm.doc.extra_beds_child || 0,
+            agreed_rate: frm.doc.agreed_rate || 0,
+            is_rate_overridden: frm.doc.is_rate_overridden || 0
         },
         callback: function(r) {
             if (r.message) {
@@ -433,6 +368,13 @@ function render_room_rate_preview(frm) {
                         <span style="font-weight: 500;">${format_currency(d.base_rate, currency)}</span>
                     </div>`;
                     
+                if (d.extra_bed_amount > 0) {
+                    html += `<div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span class="text-muted">Extra Beds (incl. above):</span>
+                        <span>${format_currency(d.extra_bed_amount, currency)}</span>
+                    </div>`;
+                }
+
                 if (d.discount_amount > 0) {
                     html += `<div style="display: flex; justify-content: space-between; margin-bottom: 5px; color: #e74c3c;">
                         <span>Discount:</span>

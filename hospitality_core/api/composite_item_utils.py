@@ -26,6 +26,12 @@ def process_composite_items_in_invoice(doc, method=None):
 	if is_consolidated_pos_sales_invoice(doc):
 		return
 
+	# Composite items are an optional add-on (see COMPOSITE_ITEM_SETUP.md). On a site
+	# where its custom field was never created, reading it raised "Unknown column
+	# 'is_composite_item'" and made every Sales Invoice on the site impossible to submit.
+	if not frappe.get_meta("Item").has_field("is_composite_item"):
+		return
+
 	# Determine if this is a cancellation
 	is_cancel = doc.docstatus == 2
 	

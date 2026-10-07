@@ -12,7 +12,7 @@ produce the same number.
 How the property prices a room
 ------------------------------
 `default_rate` is the weekday tariff and `weekend_rate` the premium one, charged on
-Saturdays, Sundays and any date in the property's Holiday List; each covers the room for
+Fridays, Saturdays, Sundays and any date in the property's Holiday List; each covers the room for
 up to `max_occupancy` guests. The sheet's "W/Head/Day" and
 "WE/Head/Day" columns are that tariff divided by `max_occupancy` — the per-head unit
 price, used when a group is sold by headcount rather than by room. A guest beyond
@@ -24,6 +24,19 @@ So a room type prices one of two ways, chosen by `pricing_basis`:
     Per Head        guests x per-head rate for that night
 
 plus extra beds either way.
+
+Going over capacity
+-------------------
+Exceeding `max_occupancy` is allowed, not refused. The overflow is converted into extra
+beds at the room type's adult/child rate — that is how the property actually sells it,
+and blocking the sale only pushed the front desk into editing the record afterwards.
+`auto_extra_beds` does that conversion; an explicit bed count always wins over it.
+
+Agreed rates
+------------
+A rate typed by a sales agent is an agreement with the guest, so once a line is marked
+`is_rate_overridden` the tariff stops applying to it. That override travels enquiry ->
+booking -> reservation -> folio -> invoice untouched; nothing downstream recomputes it.
 """
 
 import frappe
@@ -69,6 +82,46 @@ AMENITIES = [
 	("has_private_pool", "Private Pool", "🏊"),
 	("has_tea_coffee_toiletries", "Tea/Coffee", "☕"),
 ]
+
+
+def auto_extra_beds(max_occupancy, adults, children, qty=1):
+	"""Extra beds needed for a party that exceeds the rooms' capacity.
+
+	Capacity is filled with adults first, then children, so the overflow is billed at
+	the rate that matches who is actually in the bed — a child bed is cheaper, and a
+	family of two adults plus four children should not be charged four adult beds.
+
+	Returns (adult_beds, child_beds), both zero when the party fits.
+	"""
+	capacity = max(cint(max_occupancy), 0) * max(cint(qty), 1)
+	adults, children = cint(adults), cint(children)
+	if not capacity:
+		return 0, 0
+
+	adult_beds = max(adults - capacity, 0)
+	remaining = max(capacity - adults, 0)
+	child_beds = max(children - remaining, 0)
+	return adult_beds, child_beds
+
+
+def apply_discount(amount, discount_type=None, discount_value=0):
+	"""Discount on an amount. Returns (discount_amount, net_amount).
+
+	Never discounts below zero and never returns a negative discount, so a mistyped
+	value cannot turn a charge into a credit.
+	"""
+	amount = flt(amount)
+	value = flt(discount_value)
+	if value <= 0 or not discount_type:
+		return 0.0, amount
+
+	if str(discount_type).strip() == "Percentage":
+		discount = amount * (min(value, 100.0) / 100.0)
+	else:
+		discount = value
+
+	discount = min(max(discount, 0.0), amount)
+	return flt(discount, 2), flt(amount - discount, 2)
 
 
 def amenity_list(row):
@@ -127,7 +180,7 @@ def _rates_for(room_type):
 def nightly_rate(rates, date, basis=None, holiday_list=None):
 	"""The room's tariff for the night beginning on `date`, before extra beds.
 
-	Premium nights — Saturday, Sunday, or a date in the Holiday List — take the
+	Premium nights — Friday, Saturday, Sunday, or a date in the Holiday List — take the
 	weekend side of every rate pair.
 	"""
 	premium = is_premium_date(date, holiday_list)
@@ -151,23 +204,33 @@ def nightly_rate(rates, date, basis=None, holiday_list=None):
 
 @frappe.whitelist()
 def quote_stay(room_type, arrival_date, departure_date, qty=1, adults=0, children=0,
-               extra_beds_adult=0, extra_beds_child=0, rate_plan=None, basis=None):
+               extra_beds_adult=0, extra_beds_child=0, rate_plan=None, basis=None,
+               rate_override=None, discount_type=None, discount_value=0,
+               auto_beds=True):
 	"""Price one room type for one stay window, night by night.
 
 	Returns a breakdown rather than a single number so the front desk can show the
 	guest why a weekend stay costs more than a weekday one.
 
+	`rate_override` is an agreed nightly rate that replaces the tariff for every night —
+	what a sales agent negotiated on the phone. `discount_type`/`discount_value` come off
+	the gross. `auto_beds` fills in extra beds for a party that exceeds capacity when the
+	caller has not set them explicitly.
+
 	    {
 	      "nights": [{date, weekend, rate_class, rate, extra_bed, amount}],
 	      "room_nights": n, "qty": n,
-	      "room_total": x, "extra_bed_total": x, "total": x,
-	      "average_nightly": x, "basis": "...", "currency": "INR",
+	      "room_total": x, "extra_bed_total": x, "gross_total": x,
+	      "discount_amount": x, "total": x,
+	      "average_room_nightly": x, "average_nightly": x,
+	      "basis": "...", "currency": "INR",
 	      "capacity": {...}, "warnings": [...]
 	    }
 	"""
 	qty = max(cint(qty), 1)
 	adults, children = cint(adults), cint(children)
 	extra_beds_adult, extra_beds_child = cint(extra_beds_adult), cint(extra_beds_child)
+	rate_override = flt(rate_override) if rate_override not in (None, "") else None
 
 	start, end = getdate(arrival_date), getdate(departure_date)
 	if end <= start:
@@ -192,20 +255,40 @@ def quote_stay(room_type, arrival_date, departure_date, qty=1, adults=0, childre
 	max_occupancy = cint(rates.get("max_occupancy")) or 1
 	bed_adult = flt(rates.get("extra_bed_adult_rate"))
 	bed_child = flt(rates.get("extra_bed_child_rate"))
+
+	# Over capacity is a sale, not an error: convert the overflow into extra beds at
+	# this category's rates unless the caller has already decided the bed count.
+	auto_added = False
+	if cint(auto_beds) and not (extra_beds_adult or extra_beds_child):
+		extra_beds_adult, extra_beds_child = auto_extra_beds(
+			max_occupancy, adults, children, qty
+		)
+		auto_added = bool(extra_beds_adult or extra_beds_child)
+
 	extra_bed_per_night = (extra_beds_adult * bed_adult) + (extra_beds_child * bed_child)
 
 	nights, room_total = [], 0.0
 	current = start
 	while current < end:
-		if plan and plan.active and getdate(plan.valid_from) <= current <= getdate(plan.valid_to):
+		if rate_override is not None:
+			# An agreed rate is an agreement: neither the weekend split nor a rate plan
+			# reopens it.
+			rate = rate_override
+			source = "Agreed Rate"
+		elif plan and plan.active and getdate(plan.valid_from) <= current <= getdate(plan.valid_to):
 			rate = flt(plan.rate)
 			source = "Rate Plan"
 		else:
 			rate = nightly_rate(rates, current, basis, holiday_list)
 			source = basis
 
-		# Per-head pricing multiplies by the people actually staying.
-		line_rate = rate * max(heads, 1) if basis == "Per Head" and source != "Rate Plan" else rate
+		# Per-head pricing multiplies by the people actually staying. An agreed rate is
+		# already the nightly figure for the room, so it is never multiplied again.
+		line_rate = (
+			rate * max(heads, 1)
+			if basis == "Per Head" and source not in ("Rate Plan", "Agreed Rate")
+			else rate
+		)
 		amount = (line_rate + extra_bed_per_night) * qty
 		room_total += line_rate * qty
 
@@ -224,15 +307,29 @@ def quote_stay(room_type, arrival_date, departure_date, qty=1, adults=0, childre
 		current = add_days(current, 1)
 
 	extra_bed_total = extra_bed_per_night * qty * len(nights)
-	total = room_total + extra_bed_total
+	gross_total = room_total + extra_bed_total
+	discount_amount, total = apply_discount(gross_total, discount_type, discount_value)
 
-	warnings = []
+	notices = []
 	capacity = max_occupancy * qty
 	beds = extra_beds_adult + extra_beds_child
-	if heads and heads > capacity + beds:
-		warnings.append(
-			_("{0} guests exceed the {1} allowed in {2} {3} room(s). Add {4} extra bed(s).")
-			.format(heads, capacity, qty, room_type, heads - capacity - beds)
+
+	if auto_added:
+		notices.append(
+			_("{0} guests exceed the {1} these rooms sleep, so {2} extra bed(s) "
+			  "were added at {3}.").format(
+				heads, capacity, beds,
+				frappe.utils.fmt_money(extra_bed_per_night, currency=_currency()),
+			)
+		)
+	elif heads and heads > capacity + beds:
+		# Explicit bed counts are respected even when they do not cover the party, but
+		# say so rather than quietly under-billing.
+		notices.append(
+			_("{0} guests exceed the {1} these rooms sleep and the {2} extra bed(s) set. "
+			  "{3} guest(s) have nowhere to sleep.").format(
+				heads, capacity, beds, heads - capacity - beds
+			)
 		)
 
 	return {
@@ -243,7 +340,23 @@ def quote_stay(room_type, arrival_date, departure_date, qty=1, adults=0, childre
 		"room_nights": len(nights) * qty,
 		"room_total": flt(room_total, 2),
 		"extra_bed_total": flt(extra_bed_total, 2),
+		"extra_bed_per_night": flt(extra_bed_per_night, 2),
+		"extra_beds_adult": extra_beds_adult,
+		"extra_beds_child": extra_beds_child,
+		"beds_auto_added": auto_added,
+		"gross_total": flt(gross_total, 2),
+		"discount_type": discount_type,
+		"discount_value": flt(discount_value),
+		"discount_amount": flt(discount_amount, 2),
+		"rate_override": rate_override,
 		"total": flt(total, 2),
+		# Two different questions, two different numbers. `average_room_nightly` is what
+		# the room itself costs per night — no beds, no discount — so it is the figure
+		# that belongs in a Rate/Night field and the one that is safe to hand back as
+		# `rate_override`. `average_nightly` is what the guest pays per room-night all
+		# in, for a headline like "avg x nights". Quoting the all-in figure as the rate
+		# and then adding the beds beside it bills them twice.
+		"average_room_nightly": flt(room_total / (len(nights) * qty), 2) if nights else 0.0,
 		"average_nightly": flt(total / (len(nights) * qty), 2) if nights else 0.0,
 		"currency": frappe.defaults.get_global_default("currency") or "INR",
 		"premium_nights": sum(1 for n in nights if n["weekend"]),
@@ -254,24 +367,36 @@ def quote_stay(room_type, arrival_date, departure_date, qty=1, adults=0, childre
 			"per_booking": capacity,
 			"guests": heads,
 			"extra_beds": beds,
-			"within_capacity": not warnings,
+			"within_capacity": heads <= capacity,
+			"sleeps": capacity + beds,
 		},
-		"warnings": warnings,
+		# Kept as `warnings` because every caller already reads that key; these are now
+		# informational notices, not refusals.
+		"warnings": notices,
+		"notices": notices,
 	}
 
 
+def _currency():
+	return frappe.defaults.get_global_default("currency") or "INR"
+
+
 @frappe.whitelist()
-def quote_rooms(lines, arrival_date, departure_date, rate_plan=None):
+def quote_rooms(lines, arrival_date, departure_date, rate_plan=None,
+                discount_type=None, discount_value=0):
 	"""Price several room-type lines for one stay window.
 
 	`lines` is a list of {room_type, qty, adults, children, extra_beds_adult,
-	extra_beds_child}. Used by the booking form and the POS cart, which both hold more
-	than one room type at a time.
+	extra_beds_child, rate_override, is_rate_overridden}. Used by the booking form and
+	the POS cart, which both hold more than one room type at a time.
+
+	The discount belongs to the quote as a whole, not to a line: an agent agrees one
+	figure off the booking, so it is applied once to the subtotal here.
 	"""
 	if isinstance(lines, str):
 		lines = frappe.parse_json(lines)
 
-	quotes, total = [], 0.0
+	quotes, gross = [], 0.0
 	for line in lines or []:
 		if not line.get("room_type"):
 			continue
@@ -282,15 +407,26 @@ def quote_rooms(lines, arrival_date, departure_date, rate_plan=None):
 			extra_beds_adult=line.get("extra_beds_adult", 0),
 			extra_beds_child=line.get("extra_beds_child", 0),
 			rate_plan=rate_plan or line.get("rate_plan"),
+			# An agreed rate only applies when the line says it was overridden, so a
+			# stale rate left on an un-overridden line never suppresses the tariff.
+			rate_override=line.get("rate_override")
+			if cint(line.get("is_rate_overridden")) else None,
 		)
+		q["idx"] = line.get("idx")
 		quotes.append(q)
-		total += q["total"]
+		gross += q["gross_total"]
+
+	discount, total = apply_discount(gross, discount_type, discount_value)
 
 	return {
 		"lines": quotes,
+		"gross_total": flt(gross, 2),
+		"discount_type": discount_type,
+		"discount_value": flt(discount_value),
+		"discount_amount": flt(discount, 2),
 		"total": flt(total, 2),
 		"warnings": [w for q in quotes for w in q["warnings"]],
-		"currency": frappe.defaults.get_global_default("currency") or "INR",
+		"currency": _currency(),
 	}
 
 

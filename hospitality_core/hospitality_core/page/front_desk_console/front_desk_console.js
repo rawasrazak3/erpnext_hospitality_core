@@ -3,7 +3,7 @@
  * This page is where staff land, so it has two jobs: show the shift's work
  * (arrivals, departures, occupancy) and be the way to reach everything else. The
  * layout follows that order — search, primary actions, numbers, the two work
- * queues, then a full directory for the long tail.
+ * queues.
  *
  * Conventions that matter here:
  *   - Styling lives in front_desk_console.css and uses Frappe's design tokens, so
@@ -39,9 +39,11 @@
 
 	const esc = (v) => frappe.utils.escape_html(v == null ? "" : String(v));
 
-	/* Primary actions. `count` names a key from the backend's nav block; `tone`
-	 * decides whether that badge reads as urgent. Anything the user cannot open is
-	 * dropped in filter_permitted() rather than shown as a dead tile. */
+	/* Primary actions: the whole of this page's navigation. `count` names a key from
+	 * the backend's nav block and `tone` decides whether that badge reads as urgent; a
+	 * `report` tile opens that Report and names its ref_doctype in `doctype`. Anything
+	 * the user cannot open is dropped in filter_permitted() rather than shown as a
+	 * dead tile. */
 	const PRIMARY_ACTIONS = [
 		{
 			label: __("Hotel CRM"),
@@ -89,58 +91,35 @@
 			page: "guest-360",
 			icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>`,
 		},
-	];
-
-	/* The full directory. Grouped the way a hotel is actually organised, so people
-	 * look in the section that matches the job they are doing. */
-	const DIRECTORY = [
 		{
-			title: __("Sales & CRM"),
-			items: [
-				{ label: __("Hotel CRM Console"), route: "/app/hotel-crm", page: "hotel-crm", count: "enquiries_due" },
-				{ label: __("Enquiries"), route: "/app/hotel-enquiry", doctype: "Hotel Enquiry", count: "enquiries_open" },
-				{ label: __("Bookings"), route: "/app/hotel-booking", doctype: "Hotel Booking", count: "bookings_due" },
-				{ label: __("Call Log"), route: "/app/crm-call-log", doctype: "CRM Call Log", count: "calls_unlinked" },
-				{ label: __("Enquiry Conversion"), route: "/app/query-report/Enquiry Conversion", report: "Enquiry Conversion", doctype: "Hotel Enquiry" },
-				{ label: __("Call Activity"), route: "/app/query-report/Call Activity", report: "Call Activity", doctype: "CRM Call Log" },
-			],
+			label: __("Advances"),
+			hint: __("Collected in a period"),
+			report: "Advance Collection Summary",
+			doctype: "Hotel Booking",
+			icon: `<rect x="2" y="5" width="20" height="14" rx="2"></rect><circle cx="12" cy="12" r="3"></circle><path d="M6 12h.01M18 12h.01"></path>`,
 		},
 		{
-			title: __("Front Desk"),
-			items: [
-				{ label: __("Reservations"), route: "/app/hotel-reservation", doctype: "Hotel Reservation" },
-				{ label: __("Guests"), route: "/app/guest", doctype: "Guest" },
-				{ label: __("Group Bookings"), route: "/app/hotel-group-booking", doctype: "Hotel Group Booking" },
-				{ label: __("Daily Arrivals"), route: "/app/query-report/Daily Arrivals", report: "Daily Arrivals", doctype: "Hotel Reservation" },
-				{ label: __("Daily Departures"), route: "/app/query-report/Daily Departures", report: "Daily Departures", doctype: "Hotel Reservation" },
-				{ label: __("House List"), route: "/app/query-report/House List", report: "House List", doctype: "Hotel Reservation" },
-			],
+			label: __("Call History"),
+			hint: __("Who rang, who to ring back"),
+			route: "/app/call-history",
+			page: "call-history",
+			icon: `<path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><path d="M12 7v5l3 2"></path>`,
 		},
 		{
-			title: __("Rooms & Upkeep"),
-			items: [
-				{ label: __("Rooms"), route: "/app/hotel-room", doctype: "Hotel Room" },
-				{ label: __("Room Types"), route: "/app/hotel-room-type", doctype: "Hotel Room Type" },
-				{ label: __("Rate Plans"), route: "/app/room-rate-plan", doctype: "Room Rate Plan" },
-				{ label: __("Maintenance"), route: "/app/hotel-maintenance-request", doctype: "Hotel Maintenance Request", count: "maintenance_open" },
-				{ label: __("Room Availability"), route: "/app/query-report/Room Availability Report", report: "Room Availability Report", doctype: "Hotel Room" },
-				{ label: __("Lost & Found"), route: "/app/lost-and-found-item", doctype: "Lost and Found Item" },
-			],
+			label: __("Call Activity"),
+			hint: __("Calls per agent & line"),
+			report: "Call Activity",
+			doctype: "CRM Call Log",
+			icon: `<path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>`,
 		},
 		{
-			title: __("Money & Reports"),
-			items: [
-				{ label: __("Guest Folios"), route: "/app/guest-folio", doctype: "Guest Folio" },
-				{ label: __("Payment Entry"), route: "/app/payment-entry", doctype: "Payment Entry" },
-				{ label: __("Expenses"), route: "/app/hospitality-expense", doctype: "Hospitality Expense" },
-				{ label: __("Daily Payments"), route: "/app/query-report/Daily Payment Collection", report: "Daily Payment Collection", doctype: "Payment Entry" },
-				{ label: __("Room Sales"), route: "/app/query-report/Room Only Sales", report: "Room Only Sales", doctype: "Hotel Reservation" },
-				{ label: __("Advance Liability"), route: "/app/query-report/Advance Liability Register", report: "Advance Liability Register", doctype: "Hotel Booking" },
-			],
+			label: __("Unanswered Callers"),
+			hint: __("Nobody called back"),
+			report: "Unanswered Callers",
+			doctype: "CRM Call Log",
+			icon: `<path d="M23 1l-6 6M17 1l6 6"></path><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.2 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"></path>`,
 		},
 	];
-
-	const DIRECTORY_OPEN_KEY = "fdc:directory_open";
 
 	class FrontDeskConsole {
 		constructor(page, wrapper) {
@@ -189,6 +168,14 @@
 				// so it is the same answer the server would give on navigation.
 				if (item.page && frappe.boot.page_info && !frappe.boot.page_info[item.page]) {
 					return false;
+				}
+				// boot.user.all_reports holds exactly the reports this user's roles let
+				// them run. A report carries its own role list on top of its ref_doctype, so
+				// a Hospitality User can read CRM Call Log and still not be allowed to open
+				// Call Activity, which is a manager's report.
+				if (item.report) {
+					const allowed = frappe.boot.user && frappe.boot.user.all_reports;
+					if (allowed && !allowed[item.report]) return false;
 				}
 				// A report is reachable only if its ref_doctype is, which is what the
 				// doctype key carries for report entries.
@@ -251,29 +238,19 @@
 						)}
 					</div>
 
-					<div class="fdc-directory" data-fdc="directory">
-						<button class="fdc-directory-head" data-fdc="directory-toggle" aria-expanded="false">
-							<span class="fdc-directory-title">${__("All areas")}</span>
-							<span class="fdc-directory-chevron">${svg('<path d="M6 9l6 6 6-6"></path>', 16)}</span>
-						</button>
-						<div class="fdc-directory-body" data-fdc="directory-body"></div>
-					</div>
-
 					<div class="fdc-updated" data-fdc="updated"></div>
 				</div>
 			`);
 
 			this.$container.css("padding-bottom", "0");
 			this.render_actions();
-			this.render_directory();
-			this.restore_directory_state();
 		}
 
 		render_actions() {
 			const html = this.filter_permitted(PRIMARY_ACTIONS)
 				.map(
 					(a) => `
-					<a class="fdc-action" href="${a.route}" data-count="${esc(a.count || "")}" data-tone="${esc(a.tone || "")}">
+					<a class="fdc-action" href="${item_href(a)}" data-count="${esc(a.count || "")}" data-tone="${esc(a.tone || "")}">
 						<span class="fdc-action-icon">${svg(a.icon, 20)}</span>
 						<span class="fdc-action-label">${esc(a.label)}</span>
 						<span class="fdc-action-hint">${esc(a.hint)}</span>
@@ -283,52 +260,8 @@
 			this.$container.find('[data-fdc="actions"]').html(html);
 		}
 
-		render_directory() {
-			const html = DIRECTORY.map((group) => {
-				const items = this.filter_permitted(group.items);
-				if (!items.length) return "";
-				const links = items
-					.map(
-						(i) => `
-						<a class="fdc-link" href="${i.route}">
-							<span>${esc(i.label)}</span>
-							<span class="fdc-link-count" data-count="${esc(i.count || "")}"></span>
-						</a>`
-					)
-					.join("");
-				return `<div><div class="fdc-group-title">${esc(group.title)}</div>${links}</div>`;
-			}).join("");
-			this.$container.find('[data-fdc="directory-body"]').html(html);
-		}
-
-		restore_directory_state() {
-			let open = false;
-			try {
-				open = localStorage.getItem(DIRECTORY_OPEN_KEY) === "1";
-			} catch (e) {
-				// Private windows and blocked site data throw on access; default to closed.
-			}
-			this.toggle_directory(open, false);
-		}
-
-		toggle_directory(open, persist = true) {
-			this.$container.find('[data-fdc="directory"]').toggleClass("is-open", open);
-			this.$container.find('[data-fdc="directory-toggle"]').attr("aria-expanded", String(open));
-			if (!persist) return;
-			try {
-				localStorage.setItem(DIRECTORY_OPEN_KEY, open ? "1" : "0");
-			} catch (e) {
-				// Nothing to do — the panel still works, it just will not be remembered.
-			}
-		}
-
 		bind_events() {
 			const $c = this.$container;
-
-			$c.on("click", '[data-fdc="directory-toggle"]', () => {
-				const open = !$c.find('[data-fdc="directory"]').hasClass("is-open");
-				this.toggle_directory(open);
-			});
 
 			const $search = $c.find('[data-fdc="search"]');
 			$search.on(
@@ -343,6 +276,13 @@
 			});
 			$search.on("keydown", (e) => this.on_search_key(e));
 			$c.on("mousedown", '[data-fdc="results"]', (e) => e.preventDefault());
+
+			$c.on("click", "[data-fdc-act]", (e) => {
+				e.preventDefault();
+				const $b = $(e.currentTarget);
+				const action = $b.attr("data-fdc-act");
+				frappe.hospitality.stay[action]($b.attr("data-res"), { on_done: () => this.refresh() });
+			});
 
 			// "/" is the desk-wide convention for jump-to-search.
 			this.key_handler = (e) => {
@@ -521,12 +461,6 @@
 				const tone = $el.attr("data-tone") || "";
 				$el.append(`<span class="fdc-badge ${tone}">${esc(this.count_label(key))}</span>`);
 			});
-
-			this.$container.find(".fdc-link-count[data-count]").each((_, el) => {
-				const $el = $(el);
-				const key = $el.attr("data-count");
-				$el.text(this.nav[key] ? this.count_label(key) : "");
-			});
 		}
 
 		/* A capped count must not claim to be exact: the backend sends the cap it used
@@ -555,7 +489,9 @@
 		}
 
 		row_html(r, is_arrivals, date) {
-			const href = `/app/hotel-reservation/${encodeURIComponent(r.name)}`;
+			// The guest's name opens their panel on the Hotel POS Guests tab: bill,
+			// payment, dates, room and check-in/out in one place.
+			const href = `/app/hotel-pos?reservation=${encodeURIComponent(r.name)}`;
 			const time = is_arrivals ? r.arrival_time : r.departure_time;
 			const meta = [r.room || __("Unassigned"), r.room_type, time ? time.substring(0, 5) : null]
 				.filter(Boolean)
@@ -575,9 +511,11 @@
 				if (r.status === "Checked Out") {
 					pill = `<span class="fdc-pill is-done">${__("Departed")}</span>`;
 				} else if (r.status === "Checked In") {
-					const late = frappe.datetime.get_diff(frappe.datetime.now_date(), date) > 0;
-					pill = late
-						? `<span class="fdc-pill is-late">${__("Overstay")}</span>`
+					// Past their departure and never checked out: the room is already free
+					// and nothing more is charged, but the bill still needs closing.
+					const pending = r.departure_date && r.departure_date < frappe.datetime.now_date();
+					pill = pending
+						? `<span class="fdc-pill is-late">${__("Check-out pending")}</span>`
 						: `<span class="fdc-pill is-pending">${__("Due out")}</span>`;
 				}
 				// Money owed is the one thing that must not be missed at checkout.
@@ -588,13 +526,23 @@
 				}
 			}
 
+			// The desk's next step, one click away: check in who is expected today,
+			// check out who is due out. Each opens the shared dialog with the bill.
+			const today = frappe.datetime.now_date();
+			let act = "";
+			if (is_arrivals && r.status === "Reserved" && date <= today) {
+				act = `<button class="btn btn-xs btn-primary" data-fdc-act="check_in" data-res="${esc(r.name)}">${__("Check In")}</button>`;
+			} else if (!is_arrivals && r.status === "Checked In") {
+				act = `<button class="btn btn-xs btn-default" data-fdc-act="check_out" data-res="${esc(r.name)}">${__("Check Out")}</button>`;
+			}
+
 			return `
 				<div class="fdc-row">
 					<div class="fdc-row-main">
 						<a class="fdc-row-name" href="${href}">${esc(r.guest_name || r.name)}</a>
 						<div class="fdc-row-meta">${esc(meta)}</div>
 					</div>
-					<div class="fdc-row-side">${pill}</div>
+					<div class="fdc-row-side">${pill} ${act}</div>
 				</div>`;
 		}
 
@@ -615,6 +563,12 @@
 	}
 
 	/* ----------------------------------------------------------------- small helpers */
+
+	/* A report entry names the Report and nothing else: its route is that name, so
+	 * spelling it out twice would only invite the two to drift apart. */
+	function item_href(item) {
+		return item.route || "/app/query-report/" + encodeURIComponent(item.report);
+	}
 
 	function svg(paths, size) {
 		return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"

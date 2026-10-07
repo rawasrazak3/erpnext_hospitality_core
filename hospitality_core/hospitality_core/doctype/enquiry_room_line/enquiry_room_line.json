@@ -14,7 +14,10 @@
   "nights",
   "amount",
   "extra_beds_adult",
-  "extra_beds_child"
+  "extra_beds_child",
+  "extra_bed_amount",
+  "gross_amount",
+  "is_rate_overridden"
  ],
  "fields": [
   {
@@ -55,7 +58,8 @@
    "fieldname": "rate_quoted",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Rate / Night"
+   "label": "Rate / Night",
+   "description": "Nightly rate. Typing one here overrides the tariff for the whole booking cycle."
   },
   {
    "columns": 1,
@@ -70,25 +74,50 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Amount",
-   "read_only": 1
+   "read_only": 1,
+   "description": "Room plus extra beds for this line. The booking's discount comes off the total, not the line."
   },
   {
    "fieldname": "extra_beds_adult",
    "fieldtype": "Int",
    "label": "Extra Beds (Adult)",
-   "default": "0"
+   "default": "0",
+   "description": "Beds beyond Max Allowed. Filled in automatically when the party is over capacity."
   },
   {
    "fieldname": "extra_beds_child",
    "fieldtype": "Int",
    "label": "Extra Beds (Child)",
-   "default": "0"
+   "default": "0",
+   "description": "Beds beyond Max Allowed. Filled in automatically when the party is over capacity."
+  },
+  {
+   "fieldname": "extra_bed_amount",
+   "fieldtype": "Currency",
+   "label": "Extra Bed Amount",
+   "read_only": 1,
+   "description": "Extra beds x nights, at this category's bed rates."
+  },
+  {
+   "fieldname": "gross_amount",
+   "fieldtype": "Currency",
+   "label": "Gross Amount",
+   "read_only": 1,
+   "hidden": 1,
+   "description": "Same as Amount; kept so older reports that read it keep working."
+  },
+  {
+   "fieldname": "is_rate_overridden",
+   "fieldtype": "Check",
+   "label": "Rate Agreed Manually",
+   "read_only": 1,
+   "description": "Set when someone types a rate. The tariff stops applying to this line."
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-09-11 12:00:00.000000",
+ "modified": "2026-09-16 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Enquiry Room Line",

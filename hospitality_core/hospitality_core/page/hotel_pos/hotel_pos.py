@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import cint, getdate, flt
+from frappe.utils import cint, getdate, flt, nowdate
 
 from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import BLOCKED_STATUSES
 from hospitality_core.hospitality_core.api import tariff
@@ -10,16 +10,25 @@ import json
 def get_pos_data(arrival, departure, arrival_time=None, departure_time=None):
     """Live room inventory for a date+time range, priced for the actual stay.
 
-    Each room carries its category's capacity and amenities so the grid can show what
-    the guest is buying, and a `stay_total` priced night by night — a weekend stay costs
-    more than `rate x nights` and the cart has to say so.
-    """
-    if getdate(departure) < getdate(arrival):
-        return {"rooms": [], "room_types": []}
+    Every room comes back in one of four states, because the desk acts differently on
+    each: Available (sell it), Reserved (someone is booked or holding it — check them
+    in when they arrive), Occupied (a guest is in house — check them out), Maintenance.
+    Reserved used to be folded into Occupied, and a room held on a Tentative booking was
+    not blocked at all, so a booking made in the CRM did not show up here.
 
-    # Default times if not provided
-    arr_time = arrival_time or "14:00:00"
-    dep_time = departure_time or "12:00:00"
+    Blocking follows api.availability, the same rule the booking engine enforces.
+    """
+    from hospitality_core.hospitality_core.api import availability as av
+
+    from hospitality_core.hospitality_core.api.stay_policy import get_stay_times
+
+    check_in_time, check_out_time = get_stay_times()
+    if getdate(departure) <= getdate(arrival):
+        return {"rooms": [], "room_types": [], "held": {},
+                "check_in_time": check_in_time, "check_out_time": check_out_time}
+
+    # Rooms are allocated by night; times are the standard ones and do not matter.
+    start, end = av._window(arrival, departure)
 
     rooms = frappe.get_all("Hotel Room",
         fields=["name", "room_type", "status", "is_enabled", "floor"],
@@ -39,26 +48,20 @@ def get_pos_data(arrival, departure, arrival_time=None, departure_time=None):
             # A category with a broken tariff must not take the whole grid down.
             quote_map[rt["name"]] = None
 
-    # Fetch overlapping reservations using full datetime comparison
-    # CONCAT(date, time) builds a full datetime for accurate overlap detection
-    conflicts = frappe.db.sql("""
-        SELECT DISTINCT room
-        FROM `tabHotel Reservation`
-        WHERE status IN ('Reserved', 'Checked In')
-        AND CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) < %s
-        AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
-    """, (f"{departure} {dep_time}", f"{arrival} {arr_time}"), as_dict=True)
-    conflict_rooms = [c.room for c in conflicts]
+    occupants = _occupants(av, start, end)
+    held = av._soft_holds(start, end)
 
     pos_rooms = []
     for room in rooms:
-        status = "Available"
+        occupant = occupants.get(room.name)
         # Both blocking statuses collapse into one unsellable bucket here; the POS
         # only needs to know the room cannot be sold, not why.
         if not room.is_enabled or room.status in BLOCKED_STATUSES:
             status = "Maintenance"
-        elif room.name in conflict_rooms:
-            status = "Occupied"
+        elif occupant:
+            status = "Occupied" if occupant["status"] == "Checked In" else "Reserved"
+        else:
+            status = "Available"
 
         rt = type_map.get(room.room_type) or {}
         quote = quote_map.get(room.room_type)
@@ -67,6 +70,7 @@ def get_pos_data(arrival, departure, arrival_time=None, departure_time=None):
             "name": room.name,
             "room_type": room.room_type,
             "status": status,
+            "occupant": occupant,
             "floor": room.floor,
             # `rate` stays the headline nightly figure the card shows; `stay_total` is
             # what the cart actually charges for these dates.
@@ -86,7 +90,78 @@ def get_pos_data(arrival, departure, arrival_time=None, departure_time=None):
     return {
         "rooms": pos_rooms,
         "room_types": room_types,
+        # Rooms of a type promised on a booking without a room number yet. They do not
+        # block a particular card, but selling past them oversells the category.
+        "held": held,
+        "today": nowdate(),
+        "check_in_time": check_in_time,
+        "check_out_time": check_out_time,
     }
+
+
+def _occupants(av, start, end):
+    """{room: who is in it or booked into it} for the window.
+
+    A checked-in guest wins over a later arrival in the same window: the desk needs to
+    see the person physically in the room first.
+    """
+    rows = av._overlapping_reservations(start, end)
+    guests = {
+        g.name: g
+        for g in frappe.get_all(
+            "Guest",
+            filters={"name": ["in", list({r.guest for r in rows if r.guest}) or [""]]},
+            fields=["name", "full_name", "mobile_no"],
+        )
+    }
+    bookings = {
+        r.name: r.hotel_booking
+        for r in frappe.get_all(
+            "Hotel Reservation",
+            filters={"name": ["in", [r.name for r in rows] or [""]]},
+            fields=["name", "hotel_booking"],
+        )
+    }
+
+    today = getdate(nowdate())
+    out = {}
+    for r in rows:
+        if not r.room:
+            continue
+        current = out.get(r.room)
+        if current and current["status"] == "Checked In":
+            continue
+        g = guests.get(r.guest) or {}
+        out[r.room] = {
+            "reservation": r.name,
+            "booking": bookings.get(r.name),
+            "status": r.status,
+            "guest": r.guest,
+            "guest_name": g.get("full_name") or r.guest,
+            "mobile_no": g.get("mobile_no"),
+            "arrival_date": str(r.arrival_date),
+            "departure_date": str(r.departure_date),
+            "arrives_today": getdate(r.arrival_date) <= today and r.status != "Checked In",
+            "departs_today": getdate(r.departure_date) <= today and r.status == "Checked In",
+        }
+
+    for h in av._room_holds(start, end):
+        if h.room in out:
+            continue
+        out[h.room] = {
+            "reservation": None,
+            "booking": h.booking,
+            "status": h.status,
+            "guest": h.guest,
+            "guest_name": h.guest_name or h.guest,
+            "mobile_no": None,
+            "arrival_date": str(h.arrival_date),
+            "departure_date": str(h.departure_date),
+            "arrives_today": getdate(h.arrival_date) <= today,
+            "departs_today": False,
+        }
+    return out
+
 
 def _split_party(room_count, adults, children):
     """Spread a party across rooms as evenly as the numbers allow.
@@ -104,30 +179,51 @@ def _split_party(room_count, adults, children):
     return split
 
 
-def validate_party_fits(rooms, adults, children):
-    """Refuse a booking that puts more people in the rooms than they allow.
+def plan_party(rooms, adults, children):
+    """Work out how a party is distributed across the selected rooms.
 
-    Checked here rather than only in the browser: the POS is not the only caller, and a
-    room sold over its capacity becomes a complaint at check-in.
+    Over capacity is a sale, not an error: the overflow becomes extra beds at each
+    category's rates. Returns one entry per room with its guests and its beds, plus the
+    totals the desk needs to see.
     """
     if not rooms:
         frappe.throw(_("Select at least one room."))
 
-    guests = int(adults or 0) + int(children or 0)
-    if not guests:
-        return
+    adults, children = cint(adults), cint(children)
+    guests = adults + children
 
-    capacity = 0
+    capacities = []
     for room in rooms:
         room_type = frappe.db.get_value("Hotel Room", room, "room_type")
-        capacity += cint(frappe.db.get_value("Hotel Room Type", room_type, "max_occupancy"))
+        capacities.append(cint(
+            frappe.db.get_value("Hotel Room Type", room_type, "max_occupancy")
+        ) or 1)
 
-    if capacity and guests > capacity:
-        frappe.throw(
-            _("{0} guests exceed the {1} allowed across the {2} selected room(s). "
-              "Add another room, or add extra beds on the reservation.")
-            .format(guests, capacity, len(rooms))
+    total_capacity = sum(capacities)
+    split = _split_party(len(rooms), adults, children)
+
+    plan = []
+    for room, capacity, (room_adults, room_children) in zip(rooms, capacities, split):
+        bed_adults, bed_children = tariff.auto_extra_beds(
+            capacity, room_adults, room_children, 1
         )
+        plan.append({
+            "room": room,
+            "adults": room_adults,
+            "children": room_children,
+            "extra_beds_adult": bed_adults,
+            "extra_beds_child": bed_children,
+        })
+
+    return {
+        "rooms": plan,
+        "guests": guests,
+        "capacity": total_capacity,
+        "over_capacity": max(guests - total_capacity, 0),
+        "extra_beds": sum(
+            p["extra_beds_adult"] + p["extra_beds_child"] for p in plan
+        ),
+    }
 
 
 @frappe.whitelist()
@@ -146,142 +242,172 @@ def search_guests(query):
         limit=10
     )
 
+def _resolve_pos_guest(data):
+    """The Guest for a POS booking: the one picked, an existing one with the same
+    phone number, or a new one."""
+    guest = data.get("guest")
+    if not data.get("is_new_guest"):
+        return guest
+
+    gd = data.get("guest_details", {}) or {}
+
+    # Reuse an existing Guest with this phone number instead of blindly inserting.
+    # Without this, a guest who booked by phone gets a SECOND Guest record at the
+    # desk, and their advance ends up stranded on the first one's folio.
+    existing = find_guest_by_phone(gd.get("phone"))
+    if existing:
+        current = frappe.db.get_value(
+            "Guest", existing, ["email_id", "address", "aadhaar_number", "pan_number"],
+            as_dict=True,
+        ) or {}
+        # Fill in anything the desk collected that we did not already hold.
+        updates = {}
+        for field, value in (
+            ("email_id", gd.get("email")),
+            ("address", gd.get("address")),
+            ("aadhaar_number", gd.get("aadhaar")),
+            ("pan_number", gd.get("pan")),
+        ):
+            if value and not current.get(field):
+                updates[field] = value
+        if updates:
+            frappe.db.set_value("Guest", existing, updates)
+        return existing
+
+    new_guest = frappe.get_doc({
+        "doctype": "Guest",
+        "full_name": gd.get("full_name"),
+        "guest_type": gd.get("guest_type") or "Regular",
+        "gender": gd.get("gender") or None,
+        "mobile_no": gd.get("phone"),
+        "email_id": gd.get("email"),
+        "address": gd.get("address") or None,
+        "nationality": gd.get("nationality") or "Indian",
+        "aadhaar_number": gd.get("aadhaar") or None,
+        "pan_number": gd.get("pan") or None,
+        "special_requests": gd.get("special_requests") or None
+    })
+    new_guest.insert(ignore_permissions=True)
+    return new_guest.name
+
+
+def _stay_times(arrival_date_str=None, arrival_time_str=None, departure_time_str=None):
+    """Arrival and departure times: always the property's standard ones.
+
+    A walk-in arriving at 11 AM still holds the room from the standard check-in time,
+    so a guest leaving that day is never a clash; checking in early is allowed anyway.
+    The arguments are accepted for compatibility and ignored.
+    """
+    from hospitality_core.hospitality_core.api.stay_policy import get_stay_times
+
+    return get_stay_times()
+
+
 @frappe.whitelist()
 def submit_pos_booking(payload):
+    """Book rooms from the POS as a confirmed Hotel Booking.
+
+    This used to create bare Hotel Reservations with no booking behind them, which left
+    POS bookings outside everything the rest of the system keys on: they could not take
+    an advance (a reservation's folio is Provisional until check-in), they did not
+    appear with the CRM's bookings, and a POS discount was applied per room per night
+    instead of off the total the cart showed. Going through Hotel Booking gives POS and
+    CRM bookings one lifecycle.
+
+    Optional in the payload:
+      advance_amount / mode_of_payment / reference_no — money taken now;
+      check_in_now — check the guest straight in (arrival must be today).
     """
-    Creates Guest (if new) and Hotel Reservation records.
-    Returns reservation names for navigation.
-    """
-    data = json.loads(payload)
+    from hospitality_core.hospitality_core.api.advance import record_advance
 
-    # 1. Resolve Guest
-    guest = data.get("guest")
-    gd = None
-    if data.get("is_new_guest"):
-        gd = data.get("guest_details", {})
+    data = json.loads(payload) if isinstance(payload, str) else payload
 
-        # Reuse an existing Guest with this phone number instead of blindly inserting.
-        # Without this, a guest who booked by phone gets a SECOND Guest record at the
-        # desk, and their advance ends up stranded on the first one's folio.
-        existing = find_guest_by_phone(gd.get("phone"))
-        if existing:
-            return_guest = frappe.get_doc("Guest", existing)
-            # Fill in anything the desk collected that we did not already hold.
-            updates = {}
-            for field, value in (
-                ("email_id", gd.get("email")),
-                ("address", gd.get("address")),
-                ("aadhaar_number", gd.get("aadhaar")),
-                ("pan_number", gd.get("pan")),
-            ):
-                if value and not return_guest.get(field):
-                    updates[field] = value
-            if updates:
-                frappe.db.set_value("Guest", existing, updates)
-            guest = existing
-            gd = None
-
-    if gd is not None:
-        new_guest = frappe.get_doc({
-            "doctype": "Guest",
-            "full_name": gd.get("full_name"),
-            "guest_type": gd.get("guest_type") or "Regular",
-            "gender": gd.get("gender") or None,
-            "mobile_no": gd.get("phone"),
-            "email_id": gd.get("email"),
-            "address": gd.get("address") or None,
-            "nationality": gd.get("nationality") or "Indian",
-            "aadhaar_number": gd.get("aadhaar") or None,
-            "pan_number": gd.get("pan") or None,
-            "special_requests": gd.get("special_requests") or None
-        })
-        new_guest.insert(ignore_permissions=True)
-        guest = new_guest.name
-
+    guest = _resolve_pos_guest(data)
     if not guest:
         frappe.throw(_("Guest is required to create a booking."))
 
-    company = frappe.db.get_single_value("Hospitality Accounting Settings", "company") \
-              or frappe.defaults.get_user_default("Company")
-              
-    reception = frappe.db.get_value("Hotel Reception", filters={})
-
-    # Calculate date and time based on Policy
-    billing_policy = frappe.db.get_single_value("Hospitality Accounting Settings", "billing_policy") or "Fixed Time"
-    
+    rooms = data.get("rooms", [])
     arrival_date_str = data.get("arrival")
     departure_date_str = data.get("departure")
-    
-    now_dt = frappe.utils.now_datetime()
-    today_date_str = frappe.utils.nowdate()
-    
-    # Check if arrival is today. If so, they are checking in right now.
-    is_today = (arrival_date_str == today_date_str)
+    arrival_time_str, departure_time_str = _stay_times(
+        arrival_date_str, data.get("arrival_time"), data.get("departure_time")
+    )
 
-    # Get time values from payload, or compute defaults
-    arrival_time_str = data.get("arrival_time")
-    departure_time_str = data.get("departure_time")
-    
-    if billing_policy == "24-Hour":
-        if is_today:
-            # Arriving right now — use current time
-            if not arrival_time_str:
-                arrival_time_str = now_dt.strftime("%H:%M:%S")
-        else:
-            # Future booking, assume 14:00 checkin as standard fallback
-            if not arrival_time_str:
-                arrival_time_str = "14:00:00"
-            
-        # Departure time = same time as arrival (24-hour policy)
-        if not departure_time_str:
-            departure_time_str = arrival_time_str
-        
-    else:
-        # Fixed Time Policy
-        std_in = frappe.db.get_single_value("Hospitality Accounting Settings", "standard_check_in_time") or "14:00:00"
-        std_out = frappe.db.get_single_value("Hospitality Accounting Settings", "standard_check_out_time") or "12:00:00"
-        
-        if is_today:
-            if not arrival_time_str:
-                arrival_time_str = now_dt.strftime("%H:%M:%S")  # Walk-ins always check-in right now
-        else:
-            if not arrival_time_str:
-                arrival_time_str = std_in
-            
-        if not departure_time_str:
-            departure_time_str = std_out
+    adults = cint(data.get("adults") or 1)
+    children = cint(data.get("children") or 0)
 
-    # 2. Create Reservations (one per room)
-    rooms = data.get("rooms", [])
-    adults = int(data.get("adults") or 1)
-    children = int(data.get("children") or 0)
-    validate_party_fits(rooms, adults, children)
-
-    reservations = []
     # The party is spread across the selected rooms so each reservation carries a
-    # believable headcount, rather than every room claiming the whole group.
-    for room, (room_adults, room_children) in zip(rooms, _split_party(len(rooms), adults, children)):
-        res = frappe.get_doc({
-            "doctype": "Hotel Reservation",
-            "guest": guest,
-            "room": room,
-            "arrival_date": arrival_date_str,
-            "arrival_time": arrival_time_str,
-            "departure_date": departure_date_str,
-            "departure_time": departure_time_str,
-            "adults": room_adults,
-            "children": room_children,
-            "status": "Reserved",
-            "hotel_reception": reception,
-            "room_type": frappe.db.get_value("Hotel Room", room, "room_type")
-        })
-        res.insert(ignore_permissions=True)
-        reservations.append(res.name)
+    # believable headcount, and anything over a room's capacity becomes extra beds
+    # priced from its category.
+    plan = plan_party(rooms, adults, children)
 
+    # A rate typed at the desk applies to every room in this booking; the discount comes
+    # off the booking total exactly as the cart showed it.
+    rate_override = flt(data.get("rate_override")) or 0
+
+    booking = frappe.get_doc({
+        "doctype": "Hotel Booking",
+        "guest": guest,
+        "hotel_reception": frappe.db.get_value("Hotel Reception", filters={}),
+        "booking_source": data.get("booking_source")
+            or ("Walk-in" if frappe.db.exists("Hotel Enquiry Source", "Walk-in") else None),
+        "arrival_date": arrival_date_str,
+        "arrival_time": arrival_time_str,
+        "departure_date": departure_date_str,
+        "departure_time": departure_time_str,
+        "adults": adults,
+        "children": children,
+        "status": "Draft",
+        "discount_type": data.get("discount_type") or None,
+        "discount_value": flt(data.get("discount_value")),
+        "remarks": (data.get("remarks") or "").strip() or None,
+        "special_requests": ((data.get("guest_details") or {}).get("special_requests") or None),
+        "rooms": [
+            {
+                "room": entry["room"],
+                "room_type": frappe.db.get_value("Hotel Room", entry["room"], "room_type"),
+                "qty": 1,
+                "adults": entry["adults"],
+                "children": entry["children"],
+                "extra_beds_adult": entry["extra_beds_adult"],
+                "extra_beds_child": entry["extra_beds_child"],
+                "rate": rate_override or 0,
+                "is_rate_overridden": 1 if rate_override else 0,
+            }
+            for entry in plan["rooms"]
+        ],
+    })
+    booking.insert(ignore_permissions=True)
+    booking.confirm()
+    booking.reload()
+
+    advance = None
+    if flt(data.get("advance_amount")) > 0:
+        advance = record_advance(
+            booking.name, flt(data.get("advance_amount")), data.get("mode_of_payment") or "Cash",
+            reference_no=data.get("reference_no") or None,
+        )
+
+    checked_in = []
+    if cint(data.get("check_in_now")):
+        if getdate(arrival_date_str) > getdate(frappe.utils.nowdate()):
+            frappe.throw(_("Only a stay arriving today can be checked in now."))
+        result = checkin_arrival(booking=booking.name)
+        checked_in = result.get("checked_in") or []
+
+    booking.reload()
     return {
         "success": True,
-        "reservations": reservations,
-        "guest": guest
+        "booking": booking.name,
+        "reservations": [line.reservation for line in booking.rooms if line.reservation],
+        "guest": guest,
+        "total_amount": booking.total_amount,
+        "advance_received": booking.advance_received,
+        "balance_due": booking.balance_due,
+        "payment_entry": (advance or {}).get("payment_entry"),
+        "checked_in": checked_in,
+        "extra_beds": plan["extra_beds"],
+        "over_capacity": plan["over_capacity"],
     }
 
 
@@ -308,7 +434,14 @@ def get_arrivals(date=None, search=None, include_inhouse=0):
     """
     date = date or frappe.utils.nowdate()
     params = {"date": date}
-    conditions = ["b.status IN ('Confirmed', 'Tentative')", "b.arrival_date <= %(date)s"]
+    # No Show is included so a prepaid guest who arrives a day late can still be found
+    # and checked in here; checkin_arrival puts their room back in play.
+    conditions = [
+        "b.status IN ('Confirmed', 'Tentative', 'No Show')",
+        "b.arrival_date <= %(date)s",
+        # ...but only a recent one; older no-shows are a refund decision, not an arrival.
+        "(b.status != 'No Show' OR b.arrival_date >= DATE_SUB(%(date)s, INTERVAL 3 DAY))",
+    ]
 
     if search:
         key = match_key(search)

@@ -35,6 +35,20 @@ frappe.query_reports["Unanswered Callers"] = {
 			options: "User",
 		},
 		{
+			// Which of our lines the caller reached. Sourced from the call log rather than
+			// from CRM Device so a retired handset's number still lists — its old missed
+			// calls are exactly what this report looks back at.
+			fieldname: "handset",
+			label: __("Line / Handset Number"),
+			fieldtype: "MultiSelectList",
+			get_data(txt) {
+				return frappe.call({
+					method: "hospitality_core.hospitality_core.api.telephony.get_handset_numbers",
+					args: { txt: txt },
+				}).then((r) => r.message || []);
+			},
+		},
+		{
 			fieldname: "hide_with_enquiry",
 			label: __("Hide callers who already have an enquiry"),
 			fieldtype: "Check",

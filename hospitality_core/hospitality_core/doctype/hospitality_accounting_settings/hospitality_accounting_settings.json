@@ -244,13 +244,13 @@
    "fieldtype": "Link",
    "label": "Holiday List",
    "options": "Holiday List",
-   "description": "Dates in this list are charged at the Weekend Rate, on top of every Saturday and Sunday. Leave blank to use the company's default Holiday List."
+   "description": "Dates in this list are charged at the Weekend Rate, on top of every Friday, Saturday and Sunday. Leave blank to use the company's default Holiday List."
   },
   {
    "fieldname": "tariff_calendar_help",
    "fieldtype": "HTML",
    "label": "Tariff Calendar Help",
-   "options": "<p class='text-muted small'>A night is charged at the Weekend Rate when it falls on a Saturday, a Sunday, or any date in the Holiday List above. Every other night is charged at the Default Rate.</p>"
+   "options": "<p class='text-muted small'>A night is charged at the Weekend Rate when it falls on a Friday, a Saturday, a Sunday, or any date in the Holiday List above. Every other night is charged at the Default Rate.</p>"
   }
  ],
  "index_web_pages_for_search": 1,

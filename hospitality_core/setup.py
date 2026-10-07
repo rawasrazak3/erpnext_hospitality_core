@@ -160,6 +160,44 @@ def setup_custom_fields():
             if frappe.db.exists("Custom Field", name):
                 frappe.db.set_value("Custom Field", name, "module", "Hospitality Core")
 
+# The only workspaces a hotel site needs in its sidebar. Analytics sits under Hospitality
+# (parent_page), so the sidebar shows one entry.
+KEEP_WORKSPACES = ("Hospitality", "Hospitality Analytics")
+
+
+def apply_single_workspace():
+    """Hide every other public workspace, when the site asks for it.
+
+    Opt-in per site with `bench --site <site> set-config hospitality_single_workspace 1`,
+    so installing the app never rearranges someone else's desk. Runs after every
+    migrate because an ERPNext or Frappe upgrade re-syncs its own workspaces from JSON
+    and would unhide them. Nothing is deleted: a Workspace Manager still sees hidden
+    workspaces and can unhide any of them from the sidebar, and every DocType and report
+    stays reachable from the Hospitality workspace, search, and its URL.
+    """
+    if not frappe.conf.get("hospitality_single_workspace"):
+        return
+
+    hidden = frappe.get_all(
+        "Workspace",
+        filters={"public": 1, "is_hidden": 0, "name": ["not in", KEEP_WORKSPACES]},
+        pluck="name",
+    )
+    for name in hidden:
+        # update_modified=False so a newer workspace JSON from an upgrade is still
+        # imported normally; this simply hides it again afterwards.
+        frappe.db.set_value("Workspace", name, "is_hidden", 1, update_modified=False)
+
+    if frappe.db.exists("Workspace", "Hospitality"):
+        frappe.db.set_value("Workspace", "Hospitality", "is_hidden", 0, update_modified=False)
+    return hidden
+
+
+def after_migrate():
+    setup_custom_fields()
+    apply_single_workspace()
+
+
 def create_default_data():
     # Create default Allowance Reason Codes
     reasons = [

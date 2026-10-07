@@ -15,17 +15,21 @@ def check_availability_counts(start_date, end_date):
     # Capacity and amenities per category, so the tool answers "what fits where".
     catalog = {t["name"]: t for t in tariff.get_room_type_catalog(only_active=False)}
 
-    # 2. Get all Overlapping Reservations using full datetime comparison
-    # Default check-in time: 14:00, default check-out time: 12:00
-    reservations = frappe.db.sql("""
-        SELECT room, status, name, guest
-        FROM `tabHotel Reservation`
-        WHERE status IN ('Reserved', 'Checked In')
-        AND CAST(CONCAT(arrival_date, ' ', IFNULL(NULLIF(arrival_time, ''), '14:00:00')) AS DATETIME) < %s
-        AND CAST(CONCAT(departure_date, ' ', IFNULL(NULLIF(departure_time, ''), '12:00:00')) AS DATETIME) > %s
-    """, (f"{end_date} 12:00:00", f"{start_date} 14:00:00"), as_dict=True)
+    # 2. Stays sharing a night with the window, plus rooms held on a booking. Same
+    # rule as the booking engine (api.availability): by night, times play no part.
+    from hospitality_core.hospitality_core.api import availability
 
-    reservation_map = {r.room: r for r in reservations}
+    start, end = availability._window(start_date, end_date)
+    reservations = availability._overlapping_reservations(start, end)
+    for hold in availability._room_holds(start, end):
+        hold["name"] = hold.get("booking")
+        reservations.append(hold)
+
+    reservation_map = {}
+    for r in reservations:
+        # A checked-in guest wins over a later arrival in the same window.
+        if r.room and (r.room not in reservation_map or r.status == "Checked In"):
+            reservation_map[r.room] = r
 
     room_details = []
     summary_map = {}

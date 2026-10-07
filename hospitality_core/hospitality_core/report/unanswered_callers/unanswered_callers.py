@@ -10,16 +10,19 @@ who rang four times is one problem to solve, not four rows to read past.
 A number is dropped from the report as soon as any call to or from it connects, or an
 enquiry exists for it — either means somebody dealt with the person, whatever the
 individual call records look like.
+
+The Line and Handset columns say which of our numbers the caller reached, so a manager
+can see that the reception SIM is swallowing calls while the sales SIM is not.
 """
 
 import frappe
 from frappe import _
 from frappe.utils import cint
 
-# Statuses CRM Call Log uses for a call that never connected. ingest_calls maps Android's
-# MISSED/REJECTED/BLOCKED to "No Answer", and also rewrites a "Completed" call of zero
-# seconds to "No Answer", so this one value covers every unanswered case the app produces.
-UNANSWERED = ("No Answer", "Missed", "Busy", "Failed")
+from hospitality_core.hospitality_core.api.telephony import UNANSWERED_STATUSES, handset_sql
+
+# Shared with the Call History console, so the two never disagree on what went unanswered.
+UNANSWERED = UNANSWERED_STATUSES
 
 
 def execute(filters=None):
@@ -37,12 +40,25 @@ def get_columns():
 		{"label": _("Days Waiting"), "fieldname": "days_waiting", "fieldtype": "Int", "width": 115},
 		{"label": _("Incoming"), "fieldname": "incoming", "fieldtype": "Int", "width": 95},
 		{"label": _("Outgoing"), "fieldname": "outgoing", "fieldtype": "Int", "width": 95},
+		# Which of our numbers they last reached, and how many of our numbers they had
+		# to try — a caller who worked through three lines and got none of them is a
+		# different problem from one who rang the same dead line three times.
+		{"label": _("Line (Handset)"), "fieldname": "handset", "fieldtype": "Data", "width": 150},
+		{"label": _("Handset"), "fieldname": "device_label", "fieldtype": "Data", "width": 150},
+		{"label": _("Lines Tried"), "fieldname": "lines_tried", "fieldtype": "Int", "width": 105},
 		{"label": _("Last Agent"), "fieldname": "agent", "fieldtype": "Data", "width": 180},
 		{"label": _("Enquiry"), "fieldname": "enquiry", "fieldtype": "Link",
 		 "options": "Hotel Enquiry", "width": 140},
 		{"label": _("Last Call"), "fieldname": "call_log", "fieldtype": "Link",
 		 "options": "CRM Call Log", "width": 130},
 	]
+
+
+def _as_list(value):
+	"""MultiSelectList hands back a list; a Data filter or a URL hands back a string."""
+	if isinstance(value, str):
+		value = [part.strip() for part in value.split(",")]
+	return [part for part in (value or []) if part]
 
 
 def get_data(filters):
@@ -61,6 +77,7 @@ def get_data(filters):
 	agent_expr = "cl.custom_agent" if has_agent else "NULL"
 	enquiry_expr = "cl.custom_hotel_enquiry" if has_enquiry else "NULL"
 	contact_expr = "cl.custom_contact_name" if has_contact else "NULL"
+	device_join, handset_expr, label_expr = handset_sql()
 
 	conditions = [f"IFNULL({number_expr}, '') != ''"]
 	values = {"unanswered": UNANSWERED}
@@ -71,9 +88,34 @@ def get_data(filters):
 	if filters.get("to_date"):
 		conditions.append("cl.start_time <= %(to_date)s")
 		values["to_date"] = f"{filters.to_date} 23:59:59"
+
+	# The agent and handset filters deliberately do NOT narrow the WHERE clause. This
+	# report only shows a caller when *nothing* connected, and a call answered by
+	# another agent, or on another line, still means the person was dealt with. Scoping
+	# the scan would hide that connect and report the caller as ignored. So the whole
+	# number's history is still read, and the filter is applied as "at least one missed
+	# attempt was on this agent / this line".
+	extra_selects = []
+	having = ["had_miss = 1", "connected = 0"]
+
 	if filters.get("agent") and has_agent:
-		conditions.append("cl.custom_agent = %(agent)s")
+		extra_selects.append(
+			"SUM(CASE WHEN cl.status IN %(unanswered)s "
+			"AND cl.custom_agent = %(agent)s THEN 1 ELSE 0 END) AS on_agent"
+		)
+		having.append("on_agent > 0")
 		values["agent"] = filters.agent
+
+	handsets = _as_list(filters.get("handset"))
+	if handsets:
+		extra_selects.append(
+			f"SUM(CASE WHEN cl.status IN %(unanswered)s "
+			f"AND {handset_expr} IN %(handsets)s THEN 1 ELSE 0 END) AS on_handset"
+		)
+		having.append("on_handset > 0")
+		values["handsets"] = handsets
+
+	extra_select_sql = ("," + ",\n            ".join(extra_selects)) if extra_selects else ""
 
 	rows = frappe.db.sql(
 		f"""
@@ -90,11 +132,16 @@ def get_data(filters):
             MAX({contact_expr}) AS caller_name,
             MAX({agent_expr}) AS agent,
             MAX({enquiry_expr}) AS enquiry,
+            COUNT(DISTINCT {handset_expr}) AS lines_tried,
+            SUBSTRING_INDEX(GROUP_CONCAT({handset_expr} ORDER BY cl.start_time DESC), ',', 1) AS handset,
+            SUBSTRING_INDEX(GROUP_CONCAT({label_expr} ORDER BY cl.start_time DESC), ',', 1) AS device_label,
             SUBSTRING_INDEX(GROUP_CONCAT(cl.name ORDER BY cl.start_time DESC), ',', 1) AS call_log
+            {extra_select_sql}
         FROM `tabCRM Call Log` cl
+        {device_join}
         WHERE {" AND ".join(conditions)}
         GROUP BY {number_expr}
-        HAVING had_miss = 1 AND connected = 0
+        HAVING {" AND ".join(having)}
         ORDER BY days_waiting DESC, attempts DESC
         """,
 		values,
@@ -118,7 +165,8 @@ def get_data(filters):
 			continue
 		# MySQL SUM()/DATEDIFF hand back Decimal, which renders as "2.0" in an Int
 		# column. Cast so the counts read as counts.
-		for field in ("attempts", "connected", "incoming", "outgoing", "days_waiting"):
+		for field in ("attempts", "connected", "incoming", "outgoing", "days_waiting",
+		              "lines_tried"):
 			row[field] = cint(row.get(field))
 		out.append(row)
 

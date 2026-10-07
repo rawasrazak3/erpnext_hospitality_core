@@ -52,7 +52,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 		{ fieldname: 'alt_mobile', label: __('Alternate'), fieldtype: 'Data', options: 'Phone' },
 		{ fieldname: 'email', label: __('Email'), fieldtype: 'Data', options: 'Email', span: 2 },
 		{ fieldname: 'city', label: __('City'), fieldtype: 'Data' },
-		{ fieldname: 'source', label: __('Source'), fieldtype: 'Link', options: 'Hotel Enquiry Source' },
+		{ fieldname: 'source', label: __('Source'), fieldtype: 'Link', options: 'Hotel Enquiry Source', reqd: 1 },
 	];
 
 	const PIPELINE_FIELDS = [
@@ -461,6 +461,9 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 
 			if (fieldname === 'check_in_date' || fieldname === 'check_out_date') {
 				this.render_lines();
+				// The tariff is weekday/weekend/holiday split, so moving the dates can
+				// change every line's rate. Ask the server rather than guessing.
+				this.refresh_all_rates();
 				this.update_header();
 				this.load_availability();
 			}
@@ -541,6 +544,9 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				enquiry_owner: this.state.masters.user,
 				room_lines: [],
 				calls: [],
+				discount_type: '',
+				discount_value: 0,
+				remarks: '',
 			};
 			this.build_form();
 			this.load_into_form();
@@ -640,18 +646,280 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			return Math.max(frappe.datetime.get_diff(co, ci), 0);
 		},
 
-		line_amount(line) {
-			// Mirrors HotelEnquiry.calculate_quote so the number quoted on the call is the
-			// number the server stores.
+		/* Room charge before extra beds and before discount. */
+		line_room_total(line) {
 			const nights = Math.max(this.nights(), 1);
 			return (Number(line.rate_quoted) || 0) * Math.max(Number(line.qty) || 1, 1) * nights;
 		},
 
-		quote_total() {
+		/* Extra beds for a party over capacity, priced from the category.
+		 * Mirrors tariff.auto_extra_beds: capacity is filled with adults first, so the
+		 * overflow is billed at the rate matching who is actually in the bed. */
+		line_extra_beds(line) {
+			const t = (this.state.masters.room_types || []).find((x) => x.name === line.room_type);
+			if (!t || !cint(t.max_occupancy)) return { adults: 0, children: 0, amount: 0 };
+
+			const qty = Math.max(cint(line.qty) || 1, 1);
+			const capacity = cint(t.max_occupancy) * qty;
+			const adults = cint(line.adults);
+			const children = cint(line.children);
+
+			let bed_adults = cint(line.extra_beds_adult);
+			let bed_children = cint(line.extra_beds_child);
+			if (!bed_adults && !bed_children) {
+				bed_adults = Math.max(adults - capacity, 0);
+				bed_children = Math.max(children - Math.max(capacity - adults, 0), 0);
+			}
+
+			const nights = Math.max(this.nights(), 1);
+			const amount =
+				(bed_adults * flt(t.extra_bed_adult_rate) +
+					bed_children * flt(t.extra_bed_child_rate)) *
+				qty *
+				nights;
+			return { adults: bed_adults, children: bed_children, amount };
+		},
+
+		line_gross(line) {
+			return this.line_room_total(line) + this.line_extra_beds(line).amount;
+		},
+
+		/* What the Amount cell reads while a row has no rate yet. A pending row used to
+		 * show ₹0.00 and then jump, which looked like the figure arriving and leaving. */
+		line_amount_text(line) {
+			return !flt(line.rate_quoted) && this.can_quote()
+				? '—'
+				: format_currency(this.line_amount(line));
+		},
+
+		line_amount(line) {
+			// Mirrors HotelEnquiry.calculate_quote: a line is room + extra beds. The
+			// discount is agreed once for the whole quote, so it is not applied here.
+			return this.line_gross(line);
+		},
+
+		/* Pull one line's rate from the pricing engine, so the figure an agent quotes is
+		 * the figure the folio will bill: weekend and holiday nights included.
+		 *
+		 * The catalog's `default_rate` is only the weekday tariff, so it is right for a
+		 * Tuesday and wrong for a Saturday. A line whose rate the agent agreed by hand is
+		 * left alone.
+		 */
+		/* True once the dates on screen describe a real stay, so the engine can price it. */
+		can_quote() {
+			const ci = this.controls.check_in_date && this.controls.check_in_date.get_value();
+			const co = this.controls.check_out_date && this.controls.check_out_date.get_value();
+			return !!(ci && co && frappe.datetime.get_diff(co, ci) > 0);
+		},
+
+		/* Show that a row's rate is being priced rather than showing a guess at it. */
+		mark_rate_pending(i, pending) {
+			$(`#hcrm-lines-wrap tbody tr[data-i="${i}"] .l-rate_quoted`)
+				.toggleClass('hcrm-pricing', !!pending);
+		},
+
+		refresh_line_rate(i) {
+			const d = this.state.doc;
+			const line = d && d.room_lines && d.room_lines[i];
+			if (!line || !line.room_type || cint(line.is_rate_overridden)) return;
+
+			const ci = this.controls.check_in_date && this.controls.check_in_date.get_value();
+			const co = this.controls.check_out_date && this.controls.check_out_date.get_value();
+			if (!ci || !co || frappe.datetime.get_diff(co, ci) <= 0) return;
+
+			this.mark_rate_pending(i, true);
+
+			// Remember what we asked about: an agent clicking through the dropdown can
+			// land a stale response on a row that has since become something else.
+			const asked_for = line.room_type;
+
+			frappe
+				.call({
+					method: 'hospitality_core.hospitality_core.api.tariff.quote_stay',
+					args: {
+						room_type: asked_for,
+						arrival_date: ci,
+						departure_date: co,
+						qty: line.qty || 1,
+						adults: line.adults || 0,
+						children: line.children || 0,
+					},
+				})
+				.then((r) => {
+					this.mark_rate_pending(i, false);
+					const q = r && r.message;
+					if (!q) return;
+					const current = this.state.doc && this.state.doc.room_lines && this.state.doc.room_lines[i];
+					if (!current || current.room_type !== asked_for || cint(current.is_rate_overridden)) {
+						return;
+					}
+					// The agent is in the rate box right now, so whatever they are part
+					// way through typing wins over a quote that happens to land on this
+					// keystroke.
+					const $rate = $(`#hcrm-lines-wrap tbody tr[data-i="${i}"] .l-rate_quoted`);
+					if ($rate.is(':focus')) return;
+
+					// `average_room_nightly`, not `average_nightly`: this field is the
+					// room's own rate and the extra beds are shown and added separately
+					// below it. The all-in figure billed the beds twice.
+					//
+					// Derived from the breakdown when the key is absent, so a server
+					// still running a build without it prices the row instead of
+					// silently leaving the box empty.
+					const room_nights = (q.nights || []).length * Math.max(cint(q.qty) || 1, 1);
+					const quoted =
+						flt(q.average_room_nightly) ||
+						(room_nights ? flt(q.room_total) / room_nights : 0);
+					if (!quoted) return;
+					if (flt(current.rate_quoted) === flt(quoted)) return;
+
+					current.rate_quoted = flt(quoted, 2);
+
+					// Patched in place rather than redrawn. This callback lands whenever
+					// the server answers, which is routinely while the agent is still
+					// typing in the same row; render_lines() here replaced the inputs
+					// mid-keystroke, so a rate would appear and then vanish on its own.
+					$rate.val(current.rate_quoted).removeClass('hcrm-agreed');
+					this.refresh_row(i);
+					this.refresh_money();
+					this.mark_dirty();
+					this.update_header();
+				})
+				.catch(() => {
+					this.mark_rate_pending(i, false);
+					// Nothing was quoted, so show the category's weekday tariff rather
+					// than leaving the box empty. The server reprices on save anyway.
+					const current = this.state.doc && this.state.doc.room_lines && this.state.doc.room_lines[i];
+					if (!current || current.room_type !== asked_for) return;
+					if (cint(current.is_rate_overridden) || flt(current.rate_quoted)) return;
+					const t = (this.state.masters.room_types || []).find((x) => x.name === asked_for);
+					if (!t) return;
+					current.rate_quoted = flt(t.default_rate);
+					$(`#hcrm-lines-wrap tbody tr[data-i="${i}"] .l-rate_quoted`).val(current.rate_quoted);
+					this.refresh_row(i);
+					this.refresh_money();
+				});
+		},
+
+		/* Repaint the parts of one row that depend on its numbers, without rebuilding it.
+		 *
+		 * Changing Rooms, Adults or Children changes the amount, whether extra beds are
+		 * needed, and whether the party is over capacity. A full redraw would show all
+		 * three correctly but would take focus out of the field being typed in, so each
+		 * piece is patched in place instead.
+		 */
+		refresh_row(i) {
+			const d = this.state.doc;
+			const line = d && d.room_lines && d.room_lines[i];
+			const $tr = $(`#hcrm-lines-wrap tbody tr[data-i="${i}"]`);
+			if (!line || !$tr.length) return;
+
+			$tr.find('.hcrm-line-amt').text(this.line_amount_text(line));
+
+			const t = (this.state.masters.room_types || []).find((x) => x.name === line.room_type) || {};
+			const beds = this.line_extra_beds(line);
+			const $type_cell = $tr.find('td').first();
+
+			$type_cell.find('.hcrm-line-beds').remove();
+			if (beds.adults || beds.children) {
+				$type_cell.append(
+					`<div class="hcrm-line-beds" title="${__(
+						"Extra beds are charged at this category's rates"
+					)}">🛏 ${__('{0} extra bed(s)', [
+						beds.adults + beds.children,
+					])} &middot; ${format_currency(beds.amount)}</div>`
+				);
+			}
+
+			const cap = cint(t.max_occupancy) * Math.max(cint(line.qty) || 1, 1);
+			const heads = cint(line.adults) + cint(line.children);
+			const $adults = $tr.find('.l-adults');
+			if (cap && heads > cap) {
+				$adults.attr(
+					'title',
+					__('Over the {0} this category sleeps — extra beds added', [cap])
+				);
+			} else {
+				$adults.removeAttr('title');
+			}
+		},
+
+		refresh_all_rates() {
+			((this.state.doc && this.state.doc.room_lines) || []).forEach((l, i) =>
+				this.refresh_line_rate(i)
+			);
+		},
+
+		quote_subtotal() {
 			return ((this.state.doc && this.state.doc.room_lines) || []).reduce(
 				(sum, l) => sum + this.line_amount(l),
 				0
 			);
+		},
+
+		/* The discount the agent agreed for the whole quote, and the note that travels
+		 * with it to the booking, the reservation and the guest's bill. Mirrors
+		 * tariff.apply_discount: never below zero, never negative. */
+		quote_discount() {
+			const d = this.state.doc || {};
+			const subtotal = this.quote_subtotal();
+            const value = flt(d.discount_value);
+			if (!d.discount_type || value <= 0) return 0;
+			const raw =
+				d.discount_type === 'Percentage' ? subtotal * (Math.min(value, 100) / 100) : value;
+			return Math.max(Math.min(raw, subtotal), 0);
+		},
+
+		/* Rendered directly under the room table, which is where an agent settles the
+		 * commercials once the rooms are chosen. */
+		discount_panel() {
+			const d = this.state.doc || {};
+			const discount = this.quote_discount();
+
+			return `
+				<div class="hcrm-discount">
+					<div class="hcrm-discount-row">
+						<label>${__('Discount')}</label>
+						<select class="form-control input-sm d-discount_type">
+							<option value="">${__('None')}</option>
+							<option value="Amount"${
+								d.discount_type === 'Amount' ? ' selected' : ''
+							}>${__('Amount')}</option>
+							<option value="Percentage"${
+								d.discount_type === 'Percentage' ? ' selected' : ''
+							}>${__('Percentage')}</option>
+						</select>
+						<input type="number" min="0" step="any" class="form-control input-sm d-discount_value"
+							value="${d.discount_value || 0}" ${d.discount_type ? '' : 'disabled'}
+							placeholder="${d.discount_type === 'Percentage' ? '%' : format_currency(0)}">
+						<span class="hcrm-discount-amt">${discount ? `- ${format_currency(discount)}` : ''}</span>
+					</div>
+					<div class="hcrm-discount-row">
+						<label>${__('Remarks')}</label>
+						<textarea rows="2" class="form-control input-sm d-remarks" placeholder="${__(
+							'Carried to the booking, the reservation and the guest\'s bill'
+						)}">${frappe.utils.escape_html(d.remarks || '')}</textarea>
+					</div>
+					<div class="hcrm-discount-total">
+						<span>${__('Quoted Total')}</span>
+						<b class="hcrm-total">${format_currency(this.quote_total())}</b>
+					</div>
+				</div>`;
+		},
+
+		quote_total() {
+			return this.quote_subtotal() - this.quote_discount();
+		},
+
+		/* Update the three money figures in place. A full redraw would take the caret
+		 * out of whichever field the agent is typing in. */
+		refresh_money() {
+			const discount = this.quote_discount();
+			$('#hcrm-lines-wrap .hcrm-subtotal').text(format_currency(this.quote_subtotal()));
+			$('#hcrm-lines-wrap .hcrm-discount-amt').text(
+				discount ? `- ${format_currency(discount)}` : ''
+			);
+			$('#hcrm-lines-wrap .hcrm-total').text(format_currency(this.quote_total()));
 		},
 
 		add_line() {
@@ -667,11 +935,20 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				qty: 1,
 				adults: 2,
 				children: 0,
-				rate_quoted: first.default_rate || 0,
+				// Seeded from the tariff only when the engine cannot be asked. With real
+				// dates on screen the weekday tariff would flash into the box and then be
+				// replaced by the weekend one, which reads as the rate moving by itself.
+				rate_quoted: this.can_quote() ? 0 : first.default_rate || 0,
+				is_rate_overridden: 0,
+				extra_beds_adult: 0,
+				extra_beds_child: 0,
 			});
 			this.mark_dirty();
 			this.render_lines();
+			// The seeded rate is the weekday tariff; price it for the actual dates.
+			this.refresh_line_rate(this.state.doc.room_lines.length - 1);
 			this.update_header();
+			this.refresh_availability_need();
 		},
 
 		render_lines() {
@@ -711,19 +988,36 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 						? `<div class="hcrm-line-meta">${__('Weekend')} ${format_currency(t.weekend_rate)}</div>`
 						: '';
 
+					// Over capacity is sold with extra beds, so say what it adds rather
+					// than flagging it as a mistake.
+					const beds = this.line_extra_beds(l);
+					const bed_note =
+						beds.adults || beds.children
+							? `<div class="hcrm-line-beds" title="${__(
+									'Extra beds are charged at this category\'s rates'
+							  )}">🛏 ${__('{0} extra bed(s)', [
+									beds.adults + beds.children,
+							  ])} &middot; ${format_currency(beds.amount)}</div>`
+							: '';
+
 					return `<tr data-i="${i}">
 						<td><select class="form-control input-sm l-room_type">${opts}</select>
-							${meta ? `<div class="hcrm-line-meta">${meta}</div>` : ''}${wknd}</td>
+							${meta ? `<div class="hcrm-line-meta">${meta}</div>` : ''}${wknd}${bed_note}</td>
 						<td><input type="number" min="1" class="form-control input-sm l-qty" value="${l.qty || 1}"></td>
-						<td><input type="number" min="1" class="form-control input-sm l-adults${
-							over ? ' hcrm-over' : ''
-						}" value="${l.adults || 2}"${
-							over ? ` title="${__('Exceeds the {0} this category allows', [cap])}"` : ''
-						}></td>
-						<td><input type="number" min="0" step="any" class="form-control input-sm l-rate_quoted" value="${
-							l.rate_quoted || 0
+						<td><input type="number" min="0" class="form-control input-sm l-adults" value="${
+							l.adults || 2
+						}"${over ? ` title="${__('Over the {0} this category sleeps — extra beds added', [cap])}"` : ''}></td>
+						<td><input type="number" min="0" class="form-control input-sm l-children" value="${
+							l.children || 0
 						}"></td>
-						<td class="num hcrm-line-amt">${format_currency(this.line_amount(l))}</td>
+						<td><input type="number" min="0" step="any" class="form-control input-sm l-rate_quoted${
+							cint(l.is_rate_overridden) ? ' hcrm-agreed' : ''
+						}" value="${flt(l.rate_quoted) ? l.rate_quoted : ''}" placeholder="${
+							this.can_quote() ? __('Pricing…') : __('Rate')
+						}" title="${__(
+						'Typing a rate here fixes it for the whole booking cycle. Clear the box to go back to the tariff.'
+					)}"></td>
+						<td class="num hcrm-line-amt">${this.line_amount_text(l)}</td>
 						<td class="hcrm-line-del"><button class="btn btn-xs l-del" title="${__('Remove')}">&times;</button></td>
 					</tr>`;
 				})
@@ -732,20 +1026,22 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			$('#hcrm-lines-wrap').html(`
 				<table class="hcrm-lines">
 					<thead><tr>
-						<th style="width:32%">${__('Room Type')}</th>
-						<th style="width:12%">${__('Rooms')}</th>
-						<th style="width:12%">${__('Adults')}</th>
-						<th style="width:20%">${__('Rate / Night')}</th>
-						<th style="width:20%" class="num">${__('Amount')}</th>
+						<th style="width:34%">${__('Room Type')}</th>
+						<th style="width:10%">${__('Rooms')}</th>
+						<th style="width:10%">${__('Adults')}</th>
+						<th style="width:10%">${__('Children')}</th>
+						<th style="width:16%">${__('Rate / Night')}</th>
+						<th style="width:16%" class="num">${__('Amount')}</th>
 						<th style="width:4%"></th>
 					</tr></thead>
 					<tbody>${rows}</tbody>
 					<tfoot><tr>
-						<td colspan="4" class="num hcrm-total-label">${__('Quoted Total')}</td>
-						<td class="num hcrm-total">${format_currency(this.quote_total())}</td>
+						<td colspan="5" class="num hcrm-total-label">${__('Subtotal')}</td>
+						<td class="num hcrm-subtotal">${format_currency(this.quote_subtotal())}</td>
 						<td></td>
 					</tr></tfoot>
 				</table>
+				${this.discount_panel()}
 			`);
 			this.bind_lines();
 		},
@@ -753,29 +1049,109 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 		bind_lines() {
 			const d = this.state.doc;
 			$('#hcrm-lines-wrap')
-				.off('input change click')
-				.on('input change', 'select, input', (e) => {
+				.off('input change click wheel')
+				// A wheel over a focused number box silently changes it. On Rate/Night
+				// that read as a rate the agent had agreed, which locked the line off
+				// the tariff — a rate that moved on its own just from scrolling the
+				// panel. Drop focus instead, so the wheel scrolls the page.
+				.on('wheel', 'input[type=number]', (e) => {
+					if ($(e.currentTarget).is(':focus')) e.currentTarget.blur();
+				})
+				// Document-level commercials, edited below the table.
+				.on('input change', '.d-discount_type, .d-discount_value, .d-remarks', (e) => {
+					const $el = $(e.currentTarget);
+					const key = ($el.attr('class') || '')
+						.split(/\s+/)
+						.find((c) => c.startsWith('d-'))
+						.slice(2);
+
+					d[key] = key === 'discount_value' ? Number($el.val()) : $el.val();
+
+					if (key === 'discount_type') {
+						// Changes whether the value input is live, so redraw the panel.
+						this.render_lines();
+					} else {
+						this.refresh_money();
+					}
+					this.mark_dirty();
+					this.update_header();
+				})
+				.on('input change', 'select, input, textarea', (e) => {
 					const $el = $(e.currentTarget);
 					const i = $el.closest('tr').data('i');
 					const field = ($el.attr('class') || '').split(/\s+/).find((c) => c.startsWith('l-'));
 					if (!field || i == null) return;
 					const key = field.slice(2);
-					d.room_lines[i][key] = key === 'room_type' ? $el.val() : Number($el.val());
+					const line = d.room_lines[i];
 
-					// Choosing a room type pulls its default rate when none was entered.
-					if (key === 'room_type' && !d.room_lines[i].rate_quoted) {
-						const t = (this.state.masters.room_types || []).find((x) => x.name === $el.val());
-						if (t) d.room_lines[i].rate_quoted = t.default_rate;
+					line[key] = key === 'room_type' ? $el.val() : Number($el.val());
+
+					// A rate typed by hand is an agreement with the guest. Flagging it is
+					// what stops the server recomputing it back to the tariff on every
+					// later save, and it is the flag that travels to the reservation.
+					//
+					// It is only set on `change`, never on `input`. Flagging every
+					// keystroke meant that clearing the box to retype it read as an
+					// agreed rate of zero and froze the line there: no later date, room
+					// type or headcount change could reprice it, because the tariff stops
+					// applying the moment this flag is on.
+					if (key === 'rate_quoted') {
+						const typed = String($el.val()).trim();
+						if (!typed) {
+							// An empty box means "go back to the tariff", not "charge zero".
+							line.is_rate_overridden = 0;
+							line.rate_quoted = 0;
+							$el.removeClass('hcrm-agreed');
+							if (e.type === 'change') this.refresh_line_rate(i);
+						} else if (e.type === 'change') {
+							line.is_rate_overridden = 1;
+							// Marked in place rather than by redrawing: a re-render
+							// mid-keystroke would take the caret out of the field.
+							$el.addClass('hcrm-agreed');
+						}
+					}
+
+					// Switching the room type changes everything the row describes —
+					// bed layout, capacity, amenities and tariff — so the row is always
+					// redrawn. Previously this only happened when the rate was blank,
+					// and since a new row is seeded with one it never happened at all:
+					// every row kept showing the first category's "Max" and amenities.
+					if (key === 'room_type') {
+						const t = (this.state.masters.room_types || []).find(
+							(x) => x.name === $el.val()
+						);
+						// A rate the agent agreed by hand is the one thing that survives
+						// the switch; a seeded tariff rate is only a suggestion.
+						//
+						// `default_rate` is only the weekday tariff, so writing it here
+						// flashed a weekday figure into the box on a weekend stay a moment
+						// before the real quote replaced it — the rate appearing and then
+						// changing on its own. When the engine can be asked, leave the box
+						// pending and let the answer fill it; guess only when it cannot.
+						if (t && !cint(line.is_rate_overridden)) {
+							line.rate_quoted = this.can_quote() ? 0 : flt(t.default_rate);
+						}
 						this.render_lines();
+						this.refresh_line_rate(i);
 					} else {
-						// Update just the amounts so the input keeps focus while typing.
-						$('#hcrm-lines-wrap tbody tr').each((idx, tr) => {
-							$(tr).find('.hcrm-line-amt').text(format_currency(this.line_amount(d.room_lines[idx])));
-						});
-						$('#hcrm-lines-wrap .hcrm-total').text(format_currency(this.quote_total()));
+						// Patched in place rather than redrawn, so the caret stays in the
+						// field being typed in.
+						this.refresh_row(i);
+						this.refresh_money();
+
+						// Headcount and quantity both change what the engine charges —
+						// per-head pricing and extra beds — so re-ask once the value is
+						// committed rather than on every keystroke.
+						if (
+							e.type === 'change' &&
+							(key === 'qty' || key === 'adults' || key === 'children')
+						) {
+							this.refresh_line_rate(i);
+						}
 					}
 					this.mark_dirty();
 					this.update_header();
+					if (key === 'room_type' || key === 'qty') this.refresh_availability_need();
 				})
 				.on('click', '.l-del', (e) => {
 					const i = $(e.currentTarget).closest('tr').data('i');
@@ -783,6 +1159,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 					this.mark_dirty();
 					this.render_lines();
 					this.update_header();
+					this.refresh_availability_need();
 				});
 		},
 
@@ -791,10 +1168,10 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			if (!this.state.doc) return;
 			const payload = this.read_form();
 
-			if (!payload.guest_name || !payload.mobile_no) {
+			if (!payload.guest_name || !payload.mobile_no || !payload.source) {
 				frappe.msgprint({
 					title: __('Missing details'),
-					message: __('Guest name and mobile number are required.'),
+					message: __('Guest name, mobile number and source are required.'),
 					indicator: 'orange',
 				});
 				return;
@@ -895,6 +1272,8 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			const co = this.controls.check_out_date && this.controls.check_out_date.get_value();
 
 			if (!ci || !co || frappe.datetime.get_diff(co, ci) <= 0) {
+				this._availData = null;
+				this._availKey = null;
 				$('#hcrm-avail').empty();
 				return;
 			}
@@ -902,6 +1281,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			const key = ci + '|' + co + '|' + ((this.state.doc && this.state.doc.name) || '');
 			if (this._availKey === key) return;
 			this._availKey = key;
+			this._availData = null; // stale until the new window comes back
 
 			$('#hcrm-avail').html(
 				`<div class="hcrm-avail-loading">${__('Checking availability…')}</div>`
@@ -916,9 +1296,17 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				},
 				callback: (r) => {
 					if (this._availKey !== key) return; // a newer request won
+					this._availData = r.message;
 					this.render_availability(r.message);
 				},
 			});
+		},
+
+		/* The `need` badges read the room lines, so editing a line makes the strip stale.
+		 * The inventory numbers only depend on the dates, so re-render from the payload we
+		 * already have rather than asking the server the same question again. */
+		refresh_availability_need() {
+			if (this._availData) this.render_availability(this._availData);
 		},
 
 		render_availability(data) {
