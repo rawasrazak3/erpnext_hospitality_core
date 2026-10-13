@@ -37,12 +37,20 @@ def get_console_data():
     # The full catalog, so a sales agent quoting on the phone can see capacity,
     # weekend tariff and what is in the room without leaving the console.
     room_types = tariff.get_room_type_catalog()
+    # Rooms are what an agent offers; the type comes with the room.
+    rooms = frappe.get_all(
+        "Hotel Room",
+        filters={"is_enabled": 1},
+        fields=["name", "room_type", "floor", "status"],
+        order_by="room_type asc, name asc",
+    )
 
     return {
         "statuses": statuses,
         "sources": [s.name for s in sources],
         "lost_reasons": [r.name for r in lost_reasons],
         "room_types": room_types,
+        "rooms": rooms,
         "counts": get_queue_counts(),
         "user": frappe.session.user,
     }
@@ -164,11 +172,14 @@ def save_enquiry(payload):
     if "room_lines" in data:
         doc.set("room_lines", [])
         for line in data.get("room_lines") or []:
-            if not line.get("room_type"):
+            room = line.get("room") or None
+            if not (room or line.get("room_type")):
                 continue
             doc.append("room_lines", {
-                "room_type": line.get("room_type"),
-                "qty": cint(line.get("qty")) or 1,
+                # The room is the offer; HotelEnquiry.sync_room_lines fills its type.
+                "room": room,
+                "room_type": line.get("room_type") if not room else None,
+                "qty": 1 if room else (cint(line.get("qty")) or 1),
                 "adults": cint(line.get("adults")),
                 "children": cint(line.get("children")),
                 "rate_quoted": flt(line.get("rate_quoted")),
@@ -210,7 +221,7 @@ BOARD_DATE_FIELDS = {"enquired": "creation", "staying": "check_in_date"}
 
 
 @frappe.whitelist()
-def get_board(date_field=None, from_date=None, to_date=None, room_type=None):
+def get_board(date_field=None, from_date=None, to_date=None, room_type=None, room=None):
     """Enquiries grouped by status for the Kanban view.
 
     Cards carry the requested rooms and the guest's stated budget, because a pipeline
@@ -259,8 +270,12 @@ def get_board(date_field=None, from_date=None, to_date=None, room_type=None):
     # Demand is measured before the room filter, so the chips keep showing every type.
     room_demand = _summarise_demand(rows)
 
+    room_requests = _summarise_room_requests(rows)
+
     if room_type:
         rows = [r for r in rows if any(x["room_type"] == room_type for x in r["rooms"])]
+    if room:
+        rows = [r for r in rows if any(x.get("room") == room for x in r["rooms"])]
 
     grouped = {s.name: [] for s in statuses}
     for row in rows:
@@ -272,8 +287,20 @@ def get_board(date_field=None, from_date=None, to_date=None, room_type=None):
         "total": len(rows),
         "date_field": date_field or "enquired",
         "room_type": room_type or None,
+        "room": room or None,
         "room_demand": room_demand,
+        "room_requests": room_requests,
     }
+
+
+def _summarise_room_requests(rows):
+    """How many enquiries in view ask for each specific room, with its type."""
+    counts = {}
+    for row in rows:
+        for line in {(l.get("room"), l["room_type"]) for l in (row.get("rooms") or []) if l.get("room")}:
+            bucket = counts.setdefault(line[0], {"room": line[0], "room_type": line[1], "enquiries": 0})
+            bucket["enquiries"] += 1
+    return sorted(counts.values(), key=lambda b: (b["room_type"] or "", b["room"]))
 
 
 def _summarise_demand(rows):
@@ -309,7 +336,7 @@ def _attach_room_requests(rows):
     lines = frappe.get_all(
         "Enquiry Room Line",
         filters={"parent": ["in", [r.name for r in rows]], "parenttype": "Hotel Enquiry"},
-        fields=["parent", "room_type", "qty"],
+        fields=["parent", "room", "room_type", "qty"],
         order_by="idx asc",
     )
 
@@ -318,7 +345,7 @@ def _attach_room_requests(rows):
         if not line.room_type:
             continue
         by_parent.setdefault(line.parent, []).append(
-            {"room_type": line.room_type, "qty": cint(line.qty) or 1}
+            {"room": line.room, "room_type": line.room_type, "qty": cint(line.qty) or 1}
         )
 
     for row in rows:
@@ -366,13 +393,13 @@ def _competing_enquiries(arrival_date, departure_date, exclude_enquiry=None):
     """
     open_statuses = _open_status_names()
     if not open_statuses:
-        return {"by_type": {}, "total": 0, "enquiries": []}
+        return {"by_type": {}, "by_room": {}, "total": 0, "enquiries": []}
 
     rows = frappe.db.sql(
         """
         SELECT e.name, e.guest_name, e.enquiry_owner, e.status,
                e.check_in_date, e.check_out_date,
-               rl.room_type, rl.qty
+               rl.room, rl.room_type, rl.qty
         FROM `tabHotel Enquiry` e
         LEFT JOIN `tabEnquiry Room Line` rl
                ON rl.parent = e.name AND rl.parenttype = 'Hotel Enquiry'
@@ -393,12 +420,16 @@ def _competing_enquiries(arrival_date, departure_date, exclude_enquiry=None):
     )
 
     by_type = {}
+    by_room = {}
     seen = {}
     for row in rows:
         if row.room_type:
             bucket = by_type.setdefault(row.room_type, {"qty": 0, "enquiries": 0})
             bucket["qty"] += cint(row.qty) or 1
             bucket["enquiries"] += 1
+        if row.room:
+            # Another open enquiry offering this exact room for overlapping dates.
+            by_room.setdefault(row.room, []).append(row.guest_name or row.name)
         # One entry per enquiry for the tooltip, however many room lines it carries.
         if row.name not in seen:
             seen[row.name] = {
@@ -411,7 +442,8 @@ def _competing_enquiries(arrival_date, departure_date, exclude_enquiry=None):
                 "mine": row.enquiry_owner == frappe.session.user,
             }
 
-    return {"by_type": by_type, "total": len(seen), "enquiries": list(seen.values())[:12]}
+    return {"by_type": by_type, "by_room": by_room, "total": len(seen),
+            "enquiries": list(seen.values())[:12]}
 
 
 def get_or_create_guest(enquiry):
@@ -448,7 +480,37 @@ def get_or_create_guest(enquiry):
 
 
 @frappe.whitelist()
-def create_booking_from_enquiry(enquiry, action="hold", hold_hours=24):
+def get_live_bookings_for_enquiry(enquiry):
+    """Other bookings this guest (by phone number) already has that are still live.
+
+    Shown before a booking is made, because the usual reason a returning caller has a
+    booking already is that they want to change it — and a second booking leaves the
+    first room blocked and the advance recorded twice.
+    """
+    doc = frappe.get_doc("Hotel Enquiry", enquiry)
+    key = telephony.match_key(doc.mobile_no)
+    if not key:
+        return []
+    return frappe.db.sql(
+        """
+        SELECT b.name, b.status, b.arrival_date, b.departure_date, b.total_amount,
+               b.advance_received, b.enquiry,
+               (SELECT GROUP_CONCAT(IFNULL(NULLIF(l.room, ''), l.room_type) SEPARATOR ', ')
+                  FROM `tabHotel Booking Room` l WHERE l.parent = b.name) AS rooms
+        FROM `tabHotel Booking` b
+        WHERE b.status IN ('Draft', 'Tentative', 'Confirmed', 'No Show')
+          AND b.departure_date >= %(today)s
+          AND RIGHT(REGEXP_REPLACE(IFNULL(b.mobile_no, ''), '[^0-9]', ''), 10) = %(key)s
+          AND IFNULL(b.enquiry, '') != %(enquiry)s
+        ORDER BY b.arrival_date
+        """,
+        {"key": key, "today": nowdate(), "enquiry": doc.name},
+        as_dict=True,
+    )
+
+
+@frappe.whitelist()
+def create_booking_from_enquiry(enquiry, action="hold", hold_hours=24, additional_stay=0):
     """Turn an enquiry into a Hotel Booking.
 
     `action` is "hold" (Tentative, blocks inventory but assigns no rooms) or "confirm"
@@ -465,6 +527,17 @@ def create_booking_from_enquiry(enquiry, action="hold", hold_hours=24):
     if not doc.room_lines:
         frappe.throw(_("Add at least one room to the enquiry before creating a booking."))
 
+    existing = get_live_bookings_for_enquiry(doc.name)
+    if existing and not cint(additional_stay):
+        frappe.throw(_(
+            "{0} already has booking {1} ({2} to {3}). To change those dates, open that "
+            "booking's enquiry and change the dates there, or use Change Dates on the "
+            "booking. Create a new booking only for a separate, additional stay."
+        ).format(
+            doc.guest_name, existing[0].name,
+            frappe.format(existing[0].arrival_date, "Date"), frappe.format(existing[0].departure_date, "Date"),
+        ), title=_("Guest already booked"))
+
     guest = get_or_create_guest(doc)
 
     booking = frappe.get_doc({
@@ -480,8 +553,11 @@ def create_booking_from_enquiry(enquiry, action="hold", hold_hours=24):
         "status": "Draft",
         "rooms": [
             {
+                # A chosen room goes onto the booking as that room, so the hold blocks
+                # exactly it; a type-only line stays a hold on the category.
+                "room": line.room or None,
                 "room_type": line.room_type,
-                "qty": line.qty,
+                "qty": 1 if line.room else line.qty,
                 "adults": line.adults,
                 "children": line.children,
                 "rate": line.rate_quoted,

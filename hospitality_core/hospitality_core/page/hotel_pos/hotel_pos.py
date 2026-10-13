@@ -326,6 +326,27 @@ def submit_pos_booking(payload):
     if not guest:
         frappe.throw(_("Guest is required to create a booking."))
 
+    # The same guest already booked for these nights is almost always a booking made
+    # by phone that should be checked in, not booked again.
+    if not cint(data.get("additional_stay")):
+        clash = frappe.db.sql(
+            """
+            SELECT name, arrival_date, departure_date FROM `tabHotel Booking`
+            WHERE guest = %s AND status IN ('Tentative', 'Confirmed', 'Checked In', 'No Show')
+              AND arrival_date < %s AND departure_date > %s
+            LIMIT 1
+            """,
+            (guest, data.get("departure"), data.get("arrival")),
+            as_dict=True,
+        )
+        if clash:
+            c = clash[0]
+            frappe.throw(_(
+                "This guest is already booked for these dates: {0} ({1} to {2}). Check them in from "
+                "the Guests tab instead of booking again."
+            ).format(c.name, frappe.format(c.arrival_date, "Date"), frappe.format(c.departure_date, "Date")),
+                title=_("Already booked"))
+
     rooms = data.get("rooms", [])
     arrival_date_str = data.get("arrival")
     departure_date_str = data.get("departure")

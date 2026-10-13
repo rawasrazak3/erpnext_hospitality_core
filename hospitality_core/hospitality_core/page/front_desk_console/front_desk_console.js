@@ -281,6 +281,21 @@
 				e.preventDefault();
 				const $b = $(e.currentTarget);
 				const action = $b.attr("data-fdc-act");
+				if (action === "confirm_check_in") {
+					frappe.confirm(__("Confirm this booking and check the guest in now? Rooms are assigned automatically."), () =>
+						frappe
+							.call({
+								method: "hospitality_core.hospitality_core.page.hotel_pos.hotel_pos.checkin_arrival",
+								args: { booking: $b.attr("data-res") },
+								freeze: true,
+							})
+							.then((r) => {
+								if (r.message) frappe.show_alert({ message: __("Checked in"), indicator: "green" });
+								this.refresh();
+							})
+					);
+					return;
+				}
 				frappe.hospitality.stay[action]($b.attr("data-res"), { on_done: () => this.refresh() });
 			});
 
@@ -490,15 +505,22 @@
 
 		row_html(r, is_arrivals, date) {
 			// The guest's name opens their panel on the Hotel POS Guests tab: bill,
-			// payment, dates, room and check-in/out in one place.
-			const href = `/app/hotel-pos?reservation=${encodeURIComponent(r.name)}`;
+			// payment, dates, room and check-in/out in one place. A booking still on
+			// hold has no reservation yet: it opens the booking, and checking in
+			// confirms it and assigns the rooms in one step.
+			const is_hold = r.kind === "booking";
+			const href = is_hold
+				? `/app/hotel-pos?booking=${encodeURIComponent(r.name)}`
+				: `/app/hotel-pos?reservation=${encodeURIComponent(r.name)}`;
 			const time = is_arrivals ? r.arrival_time : r.departure_time;
 			const meta = [r.room || __("Unassigned"), r.room_type, time ? time.substring(0, 5) : null]
 				.filter(Boolean)
 				.join(" · ");
 
 			let pill = "";
-			if (is_arrivals) {
+			if (is_arrivals && is_hold) {
+				pill = `<span class="fdc-pill is-pending">${__("On hold")}</span>`;
+			} else if (is_arrivals) {
 				if (r.status === "Checked In" || r.status === "Checked Out") {
 					pill = `<span class="fdc-pill is-done">${__("Arrived")}</span>`;
 				} else if (r.status === "Reserved") {
@@ -530,7 +552,9 @@
 			// check out who is due out. Each opens the shared dialog with the bill.
 			const today = frappe.datetime.now_date();
 			let act = "";
-			if (is_arrivals && r.status === "Reserved" && date <= today) {
+			if (is_arrivals && is_hold && date <= today) {
+				act = `<button class="btn btn-xs btn-primary" data-fdc-act="confirm_check_in" data-res="${esc(r.name)}">${__("Confirm & Check In")}</button>`;
+			} else if (is_arrivals && r.status === "Reserved" && date <= today) {
 				act = `<button class="btn btn-xs btn-primary" data-fdc-act="check_in" data-res="${esc(r.name)}">${__("Check In")}</button>`;
 			} else if (!is_arrivals && r.status === "Checked In") {
 				act = `<button class="btn btn-xs btn-default" data-fdc-act="check_out" data-res="${esc(r.name)}">${__("Check Out")}</button>`;

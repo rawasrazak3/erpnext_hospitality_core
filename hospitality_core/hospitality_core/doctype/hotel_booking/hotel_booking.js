@@ -22,6 +22,21 @@ frappe.ui.form.on("Hotel Booking", {
 			frm.set_df_property(f, 'read_only', 1);
 			frm.set_df_property(f, 'description', __('From Hospitality Accounting Settings'));
 		});
+
+		// Saving new dates or rooms here moves the reservations with them. A guest in
+		// house is changed from the guest instead (Extend / Change Dates, Move Room),
+		// and a finished booking does not change at all.
+		const closed = ["Completed", "Cancelled"].includes(frm.doc.status);
+		const in_house = frm.doc.status === "Checked In";
+		["arrival_date", "departure_date"].forEach((f) => {
+			frm.set_df_property(f, "read_only", closed || in_house ? 1 : 0);
+			frm.set_df_property(
+				f,
+				"description",
+				in_house ? __("Guest in house: use Extend / Change Dates on the guest (Hotel POS › Guests).") : ""
+			);
+		});
+		frm.set_df_property("rooms", "read_only", closed ? 1 : 0);
 	},
 
 	arrival_date: (frm) => frm.trigger("render_room_details"),

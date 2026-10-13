@@ -134,6 +134,10 @@ def _run():
         "departure": add_days(today, 1),
         "rooms": ["301"],
         "adults": 2,
+        # This guest is already booked for tonight, which the POS now refuses as a
+        # duplicate (verify_flows covers that). Marked additional so this section keeps
+        # testing what it is about: the Guest record is reused, not duplicated.
+        "additional_stay": 1,
     }
     out = hotel_pos.submit_pos_booking(json.dumps(payload))
     check("reused the existing guest", out["guest"] == guest.name, out["guest"])

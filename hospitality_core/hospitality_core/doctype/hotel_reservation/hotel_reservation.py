@@ -26,6 +26,8 @@ class HotelReservation(Document):
         if self.status in ["Reserved", "Checked In"]:
             self.validate_room_availability()
         
+        self.guard_direct_date_edit()
+
         # Requirement: "billing to Company should be set... Folio is opened to the Company"
         # New Requirement: If Is Company Guest is checked, Company is mandatory
         if self.is_company_guest and not self.company:
@@ -144,7 +146,13 @@ class HotelReservation(Document):
             if current_hour < 8:
                 charge_date = getdate(add_days(nowdate(), -1))
             charge_date = max(charge_date, getdate(self.arrival_date))
-            in_stay = charge_date < getdate(self.departure_date)
+            # Checked in on (or after) the departure date — usually the desk forgot to
+            # press Check In until the guest was leaving. The guest still used the
+            # room, so bill the stay's last booked night rather than nothing.
+            last_night = getdate(add_days(self.departure_date, -1))
+            if charge_date > last_night:
+                charge_date = max(last_night, getdate(self.arrival_date))
+            in_stay = True
 
             if in_stay and not already_charged_today(self.folio, charge_date, room=self.room):
                 rate = get_rate(self.rate_plan, self.room_type, charge_date, reservation=self)
@@ -412,11 +420,83 @@ class HotelReservation(Document):
                 frappe.db.set_value("Guest Folio", self.folio, "status", "Cancelled")
                 frappe.msgprint(_("Linked Guest Folio {0} has been cancelled.").format(self.folio))
 
+        # A checked-in stay cancelled by a supervisor leaves the room empty.
+        from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import refresh_room_status
+        refresh_room_status(self.room, exclude=self.name)
+
         self.sync_parent_booking()
 
         return "Cancelled"
 
+    def on_trash(self):
+        """A reservation belonging to a live booking is cancelled, not deleted.
+
+        Deleting it left the booking pointing at nothing: the booking still said
+        Confirmed while no screen showed the stay and no room was held.
+        """
+        if self.hotel_booking and frappe.db.get_value("Hotel Booking", self.hotel_booking, "status") not in (
+            "Cancelled", "Draft", None
+        ):
+            frappe.throw(_("{0} belongs to booking {1}. Cancel the stay (or the booking) instead of deleting it.").format(
+                self.name, self.hotel_booking))
+
+    def guard_direct_date_edit(self):
+        """Refuse a form edit that would leave the bill and the stay disagreeing."""
+        before = self.get_doc_before_save()
+        if not before or self.status != "Checked In":
+            return
+        if getdate(before.arrival_date) != getdate(self.arrival_date):
+            frappe.throw(_("The guest is already in house; only the departure can change."))
+        if self.folio and getdate(self.departure_date) < getdate(before.departure_date):
+            posted = frappe.db.get_value(
+                "Folio Transaction",
+                {"parent": self.folio, "item": "ROOM-RENT", "is_void": 0,
+                 "posting_date": [">=", getdate(self.departure_date)]},
+                "posting_date",
+            )
+            if posted:
+                frappe.throw(_("The night of {0} is already on the bill. Check the guest out instead, "
+                               "or void that night on the folio first.").format(frappe.format(posted, "Date")))
+
+    def sync_after_direct_edit(self):
+        """A reservation edited on its form keeps its booking, rooms and bill in step.
+
+        The booking line follows the room, the booking is re-dated and repriced over
+        its rooms, room statuses follow a checked-in guest who moved, and nights an
+        extension makes due are billed straight away.
+        """
+        before = self.get_doc_before_save()
+        if not before:
+            return
+        dates_changed = (
+            getdate(before.arrival_date) != getdate(self.arrival_date)
+            or getdate(before.departure_date) != getdate(self.departure_date)
+        )
+        room_changed = before.room != self.room
+        if not (dates_changed or room_changed):
+            return
+
+        if self.hotel_booking and room_changed:
+            frappe.db.set_value(
+                "Hotel Booking Room", {"parent": self.hotel_booking, "reservation": self.name},
+                {"room": self.room, "room_type": self.room_type},
+            )
+        if self.status == "Checked In":
+            from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import refresh_room_status
+            if room_changed:
+                refresh_room_status(before.room)
+                refresh_room_status(self.room)
+            if getdate(self.departure_date) > getdate(before.departure_date):
+                from hospitality_core.hospitality_core.api.night_audit import post_due_nights
+                post_due_nights(self)
+        self.add_comment("Info", _("Changed on the form: {0} – {1}, room {2}.").format(
+            frappe.format(self.arrival_date, "Date"), frappe.format(self.departure_date, "Date"), self.room
+        ))
+        self.sync_parent_booking()
+
     def on_update(self):
+        self.sync_after_direct_edit()
+
         # Requirement: "make it possible for everybody to edit the is company and company field"
         # We handle the impact on billing and folio management here.
         if self.folio:

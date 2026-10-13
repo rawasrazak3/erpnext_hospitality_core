@@ -346,7 +346,8 @@ def _run():
 	print("\n11. Guests board: every action on one stay from one place")
 	fd = front_desk
 	arr, dep = add_days(today, 20), add_days(today, 22)
-	room6, type6 = _free_room(arr, dep, exclude=(room2, room3, room5))
+	# Free for the whole span the test later moves the stay through.
+	room6, type6 = _free_room(arr, add_days(today, 28), exclude=(room2, room3, room5))
 	pos = hotel_pos.submit_pos_booking(frappe.as_json({
 		"arrival": arr, "departure": dep, "adults": 2, "rooms": [room6],
 		"is_new_guest": 1, "guest_details": {"full_name": "Board Journey", "phone": "+91 90000 75757"},
@@ -530,3 +531,291 @@ def _run():
 	pos_times = hotel_pos.get_pos_data(today, add_days(today, 1))
 	check("POS reports the standard times",
 	      pos_times["check_in_time"] == check_in_t and pos_times["check_out_time"] == check_out_t)
+
+	# ---------------------------------------------------------------- CRM by room
+	print("\n17. CRM offers rooms, not just room types")
+	import json as _json
+	arr, dep = add_days(today, 80), add_days(today, 82)
+	free = [r for r in frappe.get_all("Hotel Room", filters={"is_enabled": 1}, fields=["name", "room_type"])
+	        if is_room_free(r.name, arr, dep)["free"]]
+	ra, rb = free[0], free[1]
+	console = hotel_crm.get_console_data()
+	check("console lists rooms with their type",
+	      any(r.name == ra.name and r.room_type == ra.room_type for r in console["rooms"]))
+
+	saved = hotel_crm.save_enquiry(_json.dumps({
+		"guest_name": "Room Pick Journey", "mobile_no": "+91 90000 81818", "source": "Phone Call",
+		"check_in_date": arr, "check_out_date": dep, "adults": 4,
+		"room_lines": [{"room": ra.name, "adults": 2}, {"room": rb.name, "adults": 2, "qty": 3}],
+	}))
+	lines = saved["room_lines"]
+	check("room type filled from the room", lines[0]["room_type"] == ra.room_type, lines[0]["room_type"])
+	check("a room line is always one room", all(l["qty"] == 1 for l in lines), [l["qty"] for l in lines])
+	check("quote priced per room", flt(saved["quoted_total"]) > 0, saved["quoted_total"])
+
+	try:
+		hotel_crm.save_enquiry(_json.dumps({"name": saved["name"],
+			"room_lines": [{"room": ra.name}, {"room": ra.name}]}))
+		check("the same room twice is refused", False)
+	except frappe.ValidationError:
+		check("the same room twice is refused", True)
+
+	rival = hotel_crm.save_enquiry(_json.dumps({
+		"guest_name": "Rival Journey", "mobile_no": "+91 90000 82828", "source": "Phone Call",
+		"check_in_date": arr, "check_out_date": dep, "room_lines": [{"room": ra.name}],
+	}))
+	av = hotel_crm.get_stay_availability(arr, dep, exclude_enquiry=saved["name"])
+	check("availability says which other enquiry wants the room",
+	      "Rival Journey" in (av["contention"]["by_room"].get(ra.name) or []), av["contention"].get("by_room"))
+
+	b = hotel_crm.get_board(date_field="staying", from_date=arr, to_date=arr, room=ra.name)
+	names = [r["name"] for rows in b["grouped"].values() for r in rows]
+	check("pipeline filters by room", saved["name"] in names and rival["name"] in names, names)
+	b2 = hotel_crm.get_board(date_field="staying", from_date=arr, to_date=arr, room=rb.name)
+	names2 = [r["name"] for rows in b2["grouped"].values() for r in rows]
+	check("room filter excludes enquiries for other rooms", rival["name"] not in names2, names2)
+	check("pipeline counts requests per room",
+	      any(x["room"] == ra.name and x["enquiries"] == 2 for x in b["room_requests"]), b["room_requests"])
+	card = next(r for rows in b["grouped"].values() for r in rows if r["name"] == saved["name"])
+	check("card carries the rooms", {x.get("room") for x in card["rooms"]} == {ra.name, rb.name}, card["rooms"])
+	b3 = hotel_crm.get_board(date_field="staying", from_date=arr, to_date=arr, room_type=ra.room_type)
+	check("room type filter still works",
+	      saved["name"] in [r["name"] for rows in b3["grouped"].values() for r in rows])
+
+	out = hotel_crm.create_booking_from_enquiry(saved["name"], action="hold")
+	hb = frappe.get_doc("Hotel Booking", out["booking"])
+	check("booking holds exactly the chosen rooms", {l.room for l in hb.rooms} == {ra.name, rb.name},
+	      [l.room for l in hb.rooms])
+	check("the chosen room is now blocked for others", not is_room_free(ra.name, arr, dep)["free"])
+
+	legacy = hotel_crm.save_enquiry(_json.dumps({
+		"guest_name": "Type Only Journey", "mobile_no": "+91 90000 83838", "source": "Phone Call",
+		"check_in_date": arr, "check_out_date": dep,
+		"room_lines": [{"room_type": ra.room_type, "qty": 2}],
+	}))
+	check("a request by type only still works", legacy["room_lines"][0]["qty"] == 2
+	      and not legacy["room_lines"][0].get("room"))
+
+	# ---------------------------------------------------------------- sales dashboard
+	print("\n18. Sales dashboard and report agree with what happened")
+	from hospitality_core.hospitality_core.api import sales_dashboard as sd
+	from hospitality_core.hospitality_core.report.hotel_sales_report.hotel_sales_report import execute as sales_report
+
+	before = sd.get_dashboard(today, today)
+	room11, _t11 = _free_room(today, add_days(today, 1), exclude=(room2, room3, room5, room7, room8, room9, room10))
+	pos = hotel_pos.submit_pos_booking(frappe.as_json({
+		"arrival": today, "departure": add_days(today, 1), "adults": 1, "rooms": [room11],
+		"is_new_guest": 1, "guest_details": {"full_name": "Dash Journey", "phone": "+91 90000 84848"},
+		"advance_amount": 777, "mode_of_payment": "Cash", "check_in_now": 1,
+	}))
+	charge = flt(frappe.db.sql("""SELECT SUM(amount) FROM `tabFolio Transaction` ft JOIN `tabGuest Folio` f ON f.name=ft.parent
+		WHERE f.reservation=%s AND ft.item IN ('ROOM-RENT','DISCOUNT') AND ft.is_void=0""", pos["reservations"][0])[0][0])
+	after = sd.get_dashboard(today, today)
+	check("revenue includes the night just charged",
+	      abs((after["revenue"]["net"] - before["revenue"]["net"]) - charge) < 0.01,
+	      (before["revenue"]["net"], after["revenue"]["net"], charge))
+	check("advance counted as collected and as an advance",
+	      abs(after["collections"]["advances"] - before["collections"]["advances"] - 777) < 0.01)
+	cash_b = next((m["net"] for m in before["modes"] if m["mode"] == "Cash"), 0)
+	cash_a = next((m["net"] for m in after["modes"] if m["mode"] == "Cash"), 0)
+	check("shown under its mode of payment", abs(cash_a - cash_b - 777) < 0.01, (cash_b, cash_a))
+	check("advance applied at check-in counted", after["advances"]["applied"] >= 777)
+	check("payment listed in the register",
+	      any(p["amount"] == 777 and p["kind"] == "Advance" for p in after["payments"]))
+	check("room night counted in occupancy",
+	      after["occupancy"]["nights_sold"] >= before["occupancy"]["nights_sold"] + 1)
+
+	cols, data, _m, _c, summary = sales_report({"from_date": today, "to_date": today, "group_by": "Day"})
+	total = data[-1]
+	check("report revenue = dashboard revenue", abs(total["net_revenue"] - after["revenue"]["net"]) < 0.01,
+	      (total["net_revenue"], after["revenue"]["net"]))
+	check("report collections = dashboard collections",
+	      abs(total["collections"] - after["collections"]["net"]) < 0.01)
+	check("report has a column per payment mode", any(c["label"].startswith("Cash") for c in cols))
+	week = sd.get_dashboard(add_days(today, -6), today)
+	check("weekly view compares with the week before",
+	      week["previous"]["to_date"] == str(getdate(add_days(today, -7))) and week["days"] == 7)
+
+	# ---------------------------------------------------------------- form edits stay in step
+	print("\n19. Editing a booking or reservation on its form keeps every screen in step")
+	from hospitality_core.hospitality_core.page.front_desk_console.front_desk_console import get_console_data
+
+	def booked_on(room, day):
+		return not is_room_free(room, day, add_days(day, 1))["free"]
+
+	def two_free_of_a_type(arr, dep):
+		by_type = {}
+		for r in frappe.get_all("Hotel Room", filters={"is_enabled": 1}, fields=["name", "room_type"]):
+			if is_room_free(r.name, arr, dep)["free"]:
+				by_type.setdefault(r.room_type, []).append(r.name)
+		return next((t, rooms) for t, rooms in by_type.items() if len(rooms) >= 2)
+
+	g = frappe.get_doc({"doctype": "Guest", "full_name": "Edit Journey",
+	                    "mobile_no": "+91 90000 85858"}).insert(ignore_permissions=True)
+
+	# a. Confirmed by editing the status (how HB-2026-00087 lost its reservation).
+	arr = today
+	rt_a, rooms_a = two_free_of_a_type(arr, add_days(arr, 1))
+	hold = frappe.get_doc({"doctype": "Hotel Booking", "guest": g.name, "arrival_date": arr,
+	                       "departure_date": add_days(arr, 1), "adults": 2, "status": "Tentative",
+	                       "rooms": [{"room_type": rt_a, "qty": 1, "adults": 2}]}).insert(ignore_permissions=True)
+	console = get_console_data(today)
+	check("a hold arriving today is on the Front Desk",
+	      any(a.get("kind") == "booking" and a["name"] == hold.name for a in console["arrivals"]))
+	hold.reload(); hold.status = "Confirmed"; hold.save(ignore_permissions=True); hold.reload()
+	check("confirming by editing the status still creates the reservation",
+	      all(l.reservation and l.room for l in hold.rooms), [(l.room, l.reservation) for l in hold.rooms])
+	console = get_console_data(today)
+	check("it is on the Front Desk as an arrival",
+	      any(a["name"] == hold.rooms[0].reservation for a in console["arrivals"]))
+	check("its room is blocked", booked_on(hold.rooms[0].room, arr))
+
+	# b. Dates edited on the booking form.
+	a1, a2 = add_days(today, 90), add_days(today, 92)
+	rt_b, rooms_b = two_free_of_a_type(a1, a2)
+	bk = frappe.get_doc({"doctype": "Hotel Booking", "guest": g.name, "arrival_date": a1,
+	                     "departure_date": a2, "adults": 2, "status": "Draft",
+	                     "rooms": [{"room_type": rt_b, "room": rooms_b[0], "qty": 1, "adults": 2}]}).insert(ignore_permissions=True)
+	bk.confirm(); bk.reload()
+	res_b = bk.rooms[0].reservation
+	n1, n2 = add_days(today, 100), add_days(today, 103)
+	bk.arrival_date, bk.departure_date = n1, n2
+	bk.save(ignore_permissions=True); bk.reload()
+	r = frappe.get_doc("Hotel Reservation", res_b)
+	check("reservation moved with the booking's new dates",
+	      str(r.arrival_date) == str(getdate(n1)) and str(r.departure_date) == str(getdate(n2)),
+	      (r.arrival_date, r.departure_date))
+	check("old dates free again on the POS", not booked_on(r.room, a1))
+	card = _pos_room(hotel_pos.get_pos_data(n1, n2), r.room)
+	check("new dates show Reserved on the POS", card["status"] == "Reserved", card["status"])
+	check("booking repriced for 3 nights", bk.nights == 3 and flt(bk.total_amount) > 0, (bk.nights, bk.total_amount))
+
+	# c. New dates clash with someone else in that room: another room of the type is used.
+	other = frappe.get_doc({"doctype": "Hotel Booking", "guest": g.name, "arrival_date": add_days(today, 110),
+	                        "departure_date": add_days(today, 111), "adults": 1, "status": "Draft",
+	                        "rooms": [{"room_type": rt_b, "room": r.room, "qty": 1, "adults": 1}]}).insert(ignore_permissions=True)
+	other.confirm()
+	bk.arrival_date, bk.departure_date = add_days(today, 110), add_days(today, 111)
+	bk.save(ignore_permissions=True); bk.reload()
+	moved = frappe.get_doc("Hotel Reservation", res_b)
+	check("clash on the new date moves the guest to another room of the type",
+	      moved.room != r.room and moved.room_type == rt_b and bk.rooms[0].room == moved.room, moved.room)
+	taken_room = other.rooms[0].room
+	bk.reload(); bk.rooms[0].room = taken_room
+	try:
+		bk.save(ignore_permissions=True)
+		check("picking a room that is taken is refused", False)
+	except frappe.ValidationError:
+		check("picking a room that is taken is refused", True)
+
+	# d. Room changed on the form.
+	bk.reload()
+	free_rooms = [x for x in frappe.get_all("Hotel Room", filters={"room_type": rt_b, "is_enabled": 1}, pluck="name")
+	              if x != bk.rooms[0].room and is_room_free(x, bk.arrival_date, bk.departure_date)["free"]]
+	if free_rooms:
+		old_room = bk.rooms[0].room
+		bk.rooms[0].room = free_rooms[0]
+		bk.save(ignore_permissions=True)
+		check("room changed on the form moves the reservation",
+		      frappe.db.get_value("Hotel Reservation", res_b, "room") == free_rooms[0])
+		check("the previous room is free again", not booked_on(old_room, bk.arrival_date))
+
+	# e. A room line removed from a two-room booking.
+	two = frappe.get_doc({"doctype": "Hotel Booking", "guest": g.name, "arrival_date": add_days(today, 120),
+	                      "departure_date": add_days(today, 121), "adults": 2, "status": "Draft",
+	                      "rooms": [{"room_type": rt_b, "qty": 2, "adults": 2}]}).insert(ignore_permissions=True)
+	two.confirm(); two.reload()
+	dropped = two.rooms[1].reservation
+	two.remove(two.rooms[1]); two.save(ignore_permissions=True)
+	check("a removed room line releases its reservation",
+	      frappe.db.get_value("Hotel Reservation", dropped, "status") == "Cancelled")
+
+	# f. A checked-in booking cannot be re-dated from the booking form.
+	hold.reload()
+	from hospitality_core.hospitality_core.api import front_desk as fdk
+	fdk.check_in(hold.rooms[0].reservation)
+	hold.reload(); hold.departure_date = add_days(today, 3)
+	try:
+		hold.save(ignore_permissions=True)
+		check("checked-in booking dates are changed on the guest, not the form", False)
+	except frappe.ValidationError:
+		check("checked-in booking dates are changed on the guest, not the form", True)
+
+	# g. Reservation edited on its own form: the booking follows.
+	r = frappe.get_doc("Hotel Reservation", res_b)
+	r.departure_date = add_days(r.departure_date, 2)
+	r.save(ignore_permissions=True)
+	b_dep = frappe.db.get_value("Hotel Booking", bk.name, ["departure_date", "nights"], as_dict=True)
+	check("booking follows a reservation edited on its form",
+	      str(b_dep.departure_date) == str(getdate(r.departure_date)) and b_dep.nights == 3, b_dep)
+
+	# h. A no-show moved to new dates is live again.
+	frappe.db.set_value("Hotel Reservation", res_b, "status", "No Show")
+	frappe.db.set_value("Hotel Booking", bk.name, "status", "No Show")
+	bk.reload(); bk.arrival_date, bk.departure_date = add_days(today, 130), add_days(today, 131)
+	bk.save(ignore_permissions=True)
+	check("a no-show moved to new dates is reserved again",
+	      frappe.db.get_value("Hotel Reservation", res_b, "status") == "Reserved"
+	      and frappe.db.get_value("Hotel Booking", bk.name, "status") == "Confirmed")
+
+	# ---------------------------------------------------------------- CRM date changes
+	print("\n20. Changing dates from the CRM moves the booking; no accidental second booking")
+	from hospitality_core.hospitality_core.doctype.hotel_booking.hotel_booking import change_booking_dates
+	d1, d2 = add_days(today, 140), add_days(today, 141)
+	r20, t20 = _free_room(d1, d2)
+	enq = hotel_crm.save_enquiry(_json.dumps({
+		"guest_name": "Move Journey", "mobile_no": "+91 90000 87878", "source": "Phone Call",
+		"check_in_date": d1, "check_out_date": d2, "room_lines": [{"room": r20, "adults": 2}],
+	}))
+	b20 = hotel_crm.create_booking_from_enquiry(enq["name"], action="confirm")["booking"]
+	res20 = frappe.db.get_value("Hotel Booking Room", {"parent": b20}, "reservation")
+
+	n1, n2 = add_days(today, 150), add_days(today, 152)
+	hotel_crm.save_enquiry(_json.dumps({"name": enq["name"], "check_in_date": n1, "check_out_date": n2}))
+	rr = frappe.db.get_value("Hotel Reservation", res20, ["arrival_date", "departure_date", "status"], as_dict=True)
+	check("new dates on the enquiry move the booking's reservation",
+	      str(rr.arrival_date) == str(getdate(n1)) and str(rr.departure_date) == str(getdate(n2)), rr)
+	check("booking follows the enquiry",
+	      str(frappe.db.get_value("Hotel Booking", b20, "arrival_date")) == str(getdate(n1)))
+	check("old dates are free again", is_room_free(r20, d1, d2)["free"])
+
+	change_booking_dates(b20, add_days(today, 155), add_days(today, 156))
+	e = frappe.db.get_value("Hotel Enquiry", enq["name"], ["check_in_date", "check_out_date"], as_dict=True)
+	check("changing the booking's dates updates the enquiry",
+	      str(e.check_in_date) == str(getdate(add_days(today, 155))), e)
+
+	again = hotel_crm.save_enquiry(_json.dumps({
+		"guest_name": "Move Journey", "mobile_no": "+91 90000 87878", "source": "Phone Call",
+		"check_in_date": add_days(today, 170), "check_out_date": add_days(today, 171),
+		"room_lines": [{"room_type": t20, "qty": 1}],
+	}))
+	check("the CRM sees the guest's existing booking",
+	      any(x.name == b20 for x in hotel_crm.get_live_bookings_for_enquiry(again["name"])))
+	try:
+		hotel_crm.create_booking_from_enquiry(again["name"], action="hold")
+		check("a second booking for the same guest needs confirming", False)
+	except frappe.ValidationError:
+		check("a second booking for the same guest needs confirming", True)
+	extra = hotel_crm.create_booking_from_enquiry(again["name"], action="hold", additional_stay=1)
+	check("an additional stay can still be booked on purpose", bool(extra.get("booking")))
+
+	frappe.db.set_value("Hotel Reservation", res20, "status", "No Show")
+	frappe.db.set_value("Hotel Booking", b20, "status", "No Show")
+	change_booking_dates(b20, add_days(today, 160), add_days(today, 161))
+	check("a no-show re-dated is live again",
+	      frappe.db.get_value("Hotel Booking", b20, "status") == "Confirmed"
+	      and frappe.db.get_value("Hotel Reservation", res20, "status") == "Reserved")
+
+	# an in-house stay is not re-dated from the CRM (the guest checked in in section 19)
+	wb = frappe.get_doc("Hotel Booking", hold.name)
+	e2 = frappe.get_doc({"doctype": "Hotel Enquiry", "guest_name": "Edit Journey", "mobile_no": "+91 90000 85858",
+	                     "source": "Walk-in", "check_in_date": wb.arrival_date, "check_out_date": wb.departure_date,
+	                     "room_lines": [{"room": wb.rooms[0].room}]}).insert(ignore_permissions=True)
+	frappe.db.set_value("Hotel Enquiry", e2.name, "hotel_booking", wb.name)
+	frappe.db.set_value("Hotel Booking", wb.name, "enquiry", e2.name)
+	check("that booking is in house", wb.status == "Checked In", wb.status)
+	try:
+		hotel_crm.save_enquiry(_json.dumps({"name": e2.name, "check_in_date": add_days(today, 5), "check_out_date": add_days(today, 6)}))
+		check("an in-house stay is not re-dated from the CRM", False)
+	except frappe.ValidationError:
+		check("an in-house stay is not re-dated from the CRM", True)

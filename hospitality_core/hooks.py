@@ -5,20 +5,39 @@ app_description = "Hotel Management Module"
 app_email = "braimahgifted@gmail.com"
 app_license = "gpl-2.0"
 
+import os as _os
+
+
+def _asset(path):
+    """/assets/hospitality_core/<path> with a version stamp from the file's mtime.
+
+    Frappe versions only *.bundle.* files; plain files like these were linked with no
+    version, and the web server tells browsers to keep /assets for a year. So a changed
+    script never reached a browser that had cached the old one — the Hotel POS sat on
+    "Loading inventory" for staff still running last week's front_desk.js. The stamp
+    changes whenever the file does, so a normal page reload picks up the new code.
+    """
+    try:
+        stamp = int(_os.path.getmtime(_os.path.join(_os.path.dirname(__file__), "public", path)))
+    except OSError:
+        stamp = 0
+    return f"/assets/hospitality_core/{path}?v={stamp}"
+
+
 app_include_js = [
-    "/assets/hospitality_core/js/hospitality_analytics_final.js",
-    "/assets/hospitality_core/js/pos_room_selection.js",
-    "/assets/hospitality_core/js/pos_invoice_auto_print.js",
-    "/assets/hospitality_core/js/payment_entry_auto_print.js",
-    "/assets/hospitality_core/js/pos_payment_control.js",
-    "/assets/hospitality_core/js/room_details.js",
-    "/assets/hospitality_core/js/front_desk.js"
+    _asset("js/hospitality_analytics_final.js"),
+    _asset("js/pos_room_selection.js"),
+    _asset("js/pos_invoice_auto_print.js"),
+    _asset("js/payment_entry_auto_print.js"),
+    _asset("js/pos_payment_control.js"),
+    _asset("js/room_details.js"),
+    _asset("js/front_desk.js"),
 ]
 
 app_include_css = [
-    "/assets/hospitality_core/css/print_format.css",
-    "/assets/hospitality_core/css/room_details.css",
-    "/assets/hospitality_core/css/front_desk.css"
+    _asset("css/print_format.css"),
+    _asset("css/room_details.css"),
+    _asset("css/front_desk.css"),
 ]
 
 
@@ -117,6 +136,11 @@ scheduler_events = {
         # nothing. Rooms are already free at that point; this never charges anything.
         "10 * * * *": [
             "hospitality_core.hospitality_core.api.front_desk.auto_check_out"
+        ],
+        # Look every morning for anything where bookings, stays, rooms, bills and
+        # enquiries disagree, and record it (Booking Health Check shows it too).
+        "0 7 * * *": [
+            "hospitality_core.hospitality_core.api.integrity.daily_check"
         ]
     }
 }

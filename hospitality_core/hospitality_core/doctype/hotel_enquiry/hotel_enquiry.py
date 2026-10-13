@@ -9,12 +9,54 @@ from frappe.utils import cint, date_diff, flt, getdate, now_datetime
 
 class HotelEnquiry(Document):
 	def validate(self):
+		self.guard_booked_date_change()
 		self.set_default_status()
 		self.normalise_mobile()
 		self.calculate_nights()
+		self.sync_room_lines()
 		self.calculate_quote()
 		self.validate_lost_reason()
+		self.guard_lost_while_booked()
 		self.stamp_follow_ups()
+
+	# ------------------------------------------------------------ booked enquiries
+	def _booked_dates_changed(self):
+		before = self.get_doc_before_save()
+		if not before or not self.hotel_booking or self.flags.from_booking:
+			return None
+		if (str(before.check_in_date) == str(self.check_in_date)
+				and str(before.check_out_date) == str(self.check_out_date)):
+			return None
+		status = frappe.db.get_value("Hotel Booking", self.hotel_booking, "status")
+		return status
+
+	def guard_booked_date_change(self):
+		"""A guest already in house is re-dated from the stay, not from the enquiry."""
+		status = self._booked_dates_changed()
+		if status in ("Checked In", "Completed"):
+			frappe.throw(_(
+				"Booking {0} is {1}. Change the stay from Hotel POS › Guests (Extend / Change Dates)."
+			).format(self.hotel_booking, status))
+
+	def on_update(self):
+		"""New dates on an enquiry that is already booked move the booking with them.
+
+		Agents changed the dates here and, seeing nothing happen to the booking, made a
+		second enquiry and booking for the new dates — leaving the old room blocked and
+		the advance recorded twice. Now the booking (and its rooms) follows the enquiry.
+		"""
+		status = self._booked_dates_changed()
+		if status not in ("Draft", "Tentative", "Confirmed", "No Show"):
+			return
+		booking = frappe.get_doc("Hotel Booking", self.hotel_booking)
+		result = booking.change_dates(self.check_in_date, self.check_out_date)
+		msg = _("Booking {0} moved to {1} – {2}. New total {3}.").format(
+			booking.name, frappe.format(self.check_in_date, "Date"), frappe.format(self.check_out_date, "Date"),
+			frappe.utils.fmt_money(result.get("total_amount")),
+		)
+		if result.get("moved"):
+			msg += " " + _("Rooms reassigned: {0}.").format(", ".join(result["moved"]))
+		frappe.msgprint(msg, indicator="green", alert=True)
 
 	def before_insert(self):
 		if not self.enquiry_owner:
@@ -38,6 +80,28 @@ class HotelEnquiry(Document):
 			self.mobile_no = self.mobile_no.strip()
 		self.mobile_key = match_key(self.mobile_no)
 		self.alt_mobile_key = match_key(self.alt_mobile)
+
+	def sync_room_lines(self):
+		"""A line names the room the guest is offered; its type follows from the room.
+
+		One room is one line (quantity 1), and the same room cannot be offered twice on
+		one enquiry. A line with only a room type — how requests were taken before
+		rooms could be chosen — is still accepted as "any room of this type".
+		"""
+		seen = set()
+		for line in self.room_lines:
+			if not line.room:
+				if not line.room_type:
+					frappe.throw(_("Row {0}: choose a room.").format(line.idx))
+				continue
+			if line.room in seen:
+				frappe.throw(_("Room {0} is on this enquiry twice.").format(line.room))
+			seen.add(line.room)
+			room_type = frappe.db.get_value("Hotel Room", line.room, "room_type")
+			if not room_type:
+				frappe.throw(_("Row {0}: room {1} does not exist.").format(line.idx, line.room))
+			line.room_type = room_type
+			line.qty = 1
 
 	def calculate_nights(self):
 		if self.check_in_date and self.check_out_date:
@@ -118,6 +182,15 @@ class HotelEnquiry(Document):
 				"Hotel Enquiry pricing",
 			)
 			return None
+
+	def guard_lost_while_booked(self):
+		"""An enquiry with a live booking cannot be marked lost: the room stays held."""
+		if self.status_type != "Lost" or not self.hotel_booking:
+			return
+		status = frappe.db.get_value("Hotel Booking", self.hotel_booking, "status")
+		if status in ("Draft", "Tentative", "Confirmed", "Checked In", "No Show"):
+			frappe.throw(_("Booking {0} is {1}. Cancel the booking first (it releases the room), then mark the enquiry lost.").format(
+				self.hotel_booking, status))
 
 	def validate_lost_reason(self):
 		if self.status_type == "Lost" and not self.lost_reason:

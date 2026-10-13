@@ -57,12 +57,220 @@ class HotelBooking(Document):
 		# (Hospitality Accounting Settings); rooms are allocated by night.
 		from hospitality_core.hospitality_core.api.stay_policy import apply_stay_times
 		apply_stay_times(self)
+		# A save from the form is how staff change a booking: plan what that does to
+		# the reservations (and reassign rooms) before anything is priced or checked.
+		if not self.flags.skip_room_validation:
+			self.plan_reservation_changes()
 		self.calculate_totals()
 		# A resync after a date move has nothing new to say about capacity or rooms, and
 		# repeating the capacity notice on every check-in and extension is just noise.
 		if not self.flags.skip_room_validation:
 			self.validate_capacity()
 			self.validate_rooms()
+
+	def on_update(self):
+		dates_moved = bool(getattr(self, "_reservation_moves", None))
+		released = getattr(self, "_released_by_status", False)
+		self.apply_reservation_changes()
+		if released:
+			self.release_enquiry(_("Booking {0} was cancelled.").format(self.name))
+			return
+		self.ensure_reservations()
+		before = self.get_doc_before_save()
+		if before and not self.flags.skip_room_validation and (
+			dates_moved
+			or getdate(before.arrival_date) != getdate(self.arrival_date)
+			or getdate(before.departure_date) != getdate(self.departure_date)
+		):
+			self.sync_enquiry_dates()
+
+	# ------------------------------------------------------------------ form edits
+	def plan_reservation_changes(self):
+		"""Work out what a plain save means for this booking's reservations.
+
+		The POS, the Tape Chart, the Front Desk and every availability check read
+		reservations, not the booking. Editing the booking's dates or a room on the form
+		used to save the booking and leave its reservations where they were, so the old
+		room stayed blocked on the old dates and the new dates showed free. Now:
+
+		  * dates changed  -> each reservation moves with them; its room is kept if free
+		    on the new dates, otherwise another free room of the same type is taken;
+		  * room or room type changed on a line -> its reservation moves to that room
+		    (a room chosen by hand must be free, or the save is refused saying why);
+		  * a room line removed -> its reservation is released;
+		  * a guest already checked in is never moved from here: the save is refused
+		    and the desk is pointed at Extend / Change Dates and Move Room.
+		"""
+		self._reservation_moves = []
+		self._reservation_cancels = []
+		self._released_by_status = False
+		before = self.get_doc_before_save()
+		if not before or self.is_new():
+			return
+
+		# Saved as Cancelled without the Cancel button (an import, a script, the API):
+		# do what Cancel does, or the rooms would stay held under a cancelled booking.
+		if self.status == "Cancelled" and before.status != "Cancelled":
+			for line in self.rooms:
+				if not line.reservation:
+					continue
+				status = frappe.db.get_value("Hotel Reservation", line.reservation, "status")
+				if status == "Checked In":
+					frappe.throw(_("{0} is checked in. Check the guest out instead of cancelling the booking.").format(line.room))
+				if status in ("Reserved", "Tentative", "No Show"):
+					self._reservation_cancels.append(line.reservation)
+			self._released_by_status = True
+			return
+
+		old_lines = {l.name: l for l in before.rooms}
+		current = {l.name for l in self.rooms}
+		for name, line in old_lines.items():
+			if name not in current and line.reservation:
+				self._reservation_cancels.append(line.reservation)
+
+		dates_changed = (
+			getdate(before.arrival_date) != getdate(self.arrival_date)
+			or getdate(before.departure_date) != getdate(self.departure_date)
+		)
+
+		for line in self.rooms:
+			if not line.reservation:
+				continue
+			res = frappe.db.get_value(
+				"Hotel Reservation", line.reservation,
+				["name", "status", "room", "room_type", "guest"], as_dict=True,
+			)
+			if not res or res.status in ("Cancelled", "Checked Out"):
+				continue
+			old = old_lines.get(line.name)
+			picked_room = bool(old and (old.room or None) != (line.room or None))
+			room_changed = bool(old and (picked_room or old.room_type != line.room_type))
+			if not (dates_changed or room_changed):
+				continue
+
+			if res.status == "Checked In":
+				frappe.throw(_(
+					"Room {0} is checked in. Change a guest's dates with Extend / Change Dates "
+					"and their room with Move Room (Hotel POS › Guests)."
+				).format(res.room))
+
+			others = {l.room for l in self.rooms if l.room and l.name != line.name}
+			room = line.room
+			# A room of another category than the line now asks for cannot stay.
+			if room and line.room_type and frappe.db.get_value("Hotel Room", room, "room_type") != line.room_type:
+				room = None
+			if room:
+				free = availability.is_room_free(
+					room, self.arrival_date, self.departure_date,
+					ignore_reservation=line.reservation, ignore_booking=self.name,
+				)
+				if not free["free"] or room in others:
+					if picked_room:
+						frappe.throw(_("Row {0}: {1}").format(
+							line.idx, free.get("reason") or _("Room {0} is already on this booking.").format(room)
+						))
+					room = None
+			if not room:
+				choices = [
+					r for r in availability.get_free_rooms(
+						self.arrival_date, self.departure_date, room_type=line.room_type,
+						ignore_reservation=line.reservation,
+					)
+					if r not in others
+				]
+				if not choices:
+					frappe.throw(_("Row {0}: no {1} room is free from {2} to {3}.").format(
+						line.idx, line.room_type,
+						frappe.format(self.arrival_date, "Date"), frappe.format(self.departure_date, "Date"),
+					))
+				room = choices[0]
+			line.room = room
+			line.qty = 1
+			self._reservation_moves.append((line.reservation, room, res.room, res.status))
+
+	def apply_reservation_changes(self):
+		"""Carry the planned moves and releases onto the reservations themselves."""
+		moves = getattr(self, "_reservation_moves", None) or []
+		cancels = getattr(self, "_reservation_cancels", None) or []
+		if not (moves or cancels):
+			return
+		times = stay_policy.stay_time_values()
+		today = getdate(nowdate())
+		revived = False
+
+		for reservation, room, old_room, status in moves:
+			values = {
+				"arrival_date": self.arrival_date,
+				"departure_date": self.departure_date,
+				"room": room,
+				"room_type": frappe.db.get_value("Hotel Room", room, "room_type"),
+				**times,
+			}
+			# A no-show moved to new dates is a live booking again.
+			if status == "No Show" and getdate(self.departure_date) > today:
+				values["status"] = "Reserved"
+				revived = True
+			frappe.db.set_value("Hotel Reservation", reservation, values)
+			folio = frappe.db.get_value("Hotel Reservation", reservation, "folio")
+			if folio:
+				frappe.db.set_value("Guest Folio", folio, "room", room)
+			note = _("Moved with booking {0}: {1} – {2}").format(
+				self.name, frappe.format(self.arrival_date, "Date"), frappe.format(self.departure_date, "Date")
+			)
+			if room != old_room:
+				note += _(", room {0} → {1}").format(old_room, room)
+			frappe.get_doc("Hotel Reservation", reservation).add_comment("Info", note + ".")
+
+		for reservation in cancels:
+			res = frappe.get_doc("Hotel Reservation", reservation)
+			if res.status in ("Tentative", "No Show"):
+				res.db_set("status", "Reserved")
+				res.reload()
+			if res.status == "Reserved":
+				res.process_cancel()
+				res.add_comment("Info", _("Released: its room line was removed from booking {0}.").format(self.name))
+
+		if revived and self.status == "No Show":
+			self.db_set("status", "Confirmed")
+		changed = [f"{old} → {room}" for _r, room, old, _s in moves if room != old]
+		msg = _("Reservations moved to {0} – {1}.").format(
+			frappe.format(self.arrival_date, "Date"), frappe.format(self.departure_date, "Date")
+		) if moves else ""
+		if changed:
+			msg += " " + _("Rooms changed: {0}.").format(", ".join(changed))
+		if cancels:
+			msg += " " + _("{0} room(s) released.").format(len(cancels))
+		frappe.msgprint(msg.strip(), indicator="green", alert=True)
+		self._reservation_moves, self._reservation_cancels = [], []
+
+	def ensure_reservations(self):
+		"""A Confirmed (or in-house) booking always has a reservation for every room.
+
+		Confirming creates them, but a booking switched to Confirmed some other way —
+		an edited status, an import, a room line added to a confirmed booking — had
+		none, so it never reached the Front Desk, the POS or the Tape Chart and its
+		room was not held. Create whatever is missing, exactly as Confirm would.
+		"""
+		if self.status not in LIVE:
+			return
+		if all(line.reservation for line in self.rooms):
+			return
+		key = f"hotel_booking_ensure:{self.name}"
+		if frappe.flags.get(key):
+			return
+		frappe.flags[key] = True
+		try:
+			self.assign_pending_rooms()
+			self.reload()
+			self.create_reservations()
+			self.ensure_booking_folio()
+			if self.hold_expiry:
+				self.db_set("hold_expiry", None)
+			if self.enquiry and not frappe.db.get_value("Hotel Enquiry", self.enquiry, "converted"):
+				self.mark_enquiry_converted()
+			self.add_comment("Info", _("Reservations created for every room on this confirmed booking."))
+		finally:
+			frappe.flags.pop(key, None)
 
 	def before_insert(self):
 		if not self.hotel_reception:
@@ -104,6 +312,12 @@ class HotelBooking(Document):
 
 		subtotal = 0.0
 		for line in self.rooms:
+			# A room cancelled on its own is no longer part of what the guest pays for.
+			if line.get("reservation") and frappe.db.get_value(
+				"Hotel Reservation", line.reservation, "status"
+			) == "Cancelled" and self.status != "Cancelled":
+				line.amount = line.gross_amount = line.extra_bed_amount = 0
+				continue
 			arrival, departure = self._line_window(line)
 			line.nights = (getdate(departure) - getdate(arrival)).days if arrival and departure else cint(self.nights)
 
@@ -181,6 +395,10 @@ class HotelBooking(Document):
 		really staying — otherwise the booking total and balance due stay frozen at the
 		original quote while the folio keeps charging.
 		"""
+		# A reservation this save is about to move is priced on where it is going.
+		moving = {m[0] for m in (getattr(self, "_reservation_moves", None) or [])}
+		if line.get("reservation") and line.reservation in moving:
+			return self.arrival_date, self.departure_date
 		if line.get("reservation"):
 			window = frappe.db.get_value(
 				"Hotel Reservation", line.reservation,
@@ -458,6 +676,15 @@ class HotelBooking(Document):
 		if self.status in ("Cancelled", "Completed"):
 			frappe.throw(_("This booking is already {0}.").format(self.status))
 
+		# Cancelling a guest who is in the room would cancel their bill with it.
+		in_house = [
+			line.room for line in self.rooms
+			if line.reservation and frappe.db.get_value("Hotel Reservation", line.reservation, "status") == "Checked In"
+		]
+		if in_house:
+			frappe.throw(_("{0} is checked in. Check the guest out instead of cancelling the booking.").format(
+				", ".join(in_house)))
+
 		for line in self.rooms:
 			if not line.reservation:
 				continue
@@ -492,6 +719,12 @@ class HotelBooking(Document):
 		re-booked without editing the record by hand.
 		"""
 		if not self.enquiry or not frappe.db.exists("Hotel Enquiry", self.enquiry):
+			return
+		# Already released (or re-booked to something else): nothing to undo.
+		if frappe.db.get_value("Hotel Enquiry", self.enquiry, "hotel_booking") not in (self.name, None, ""):
+			return
+		if not frappe.db.get_value("Hotel Enquiry", self.enquiry, "hotel_booking") and \
+				not frappe.db.get_value("Hotel Enquiry", self.enquiry, "converted"):
 			return
 
 		frappe.db.set_value("Hotel Enquiry", self.enquiry, {
@@ -546,6 +779,10 @@ class HotelBooking(Document):
 				settled = "Cancelled"
 			if self.status != settled:
 				self.db_set("status", settled)
+				if settled == "Cancelled":
+					# e.g. the night audit cancelling an unpaid no-show: put the enquiry
+					# back in the pipeline instead of leaving it Won on a dead booking.
+					self.release_enquiry(_("Booking {0} was cancelled.").format(self.name))
 		elif any(s == "Checked In" for s in states) and self.status != "Checked In":
 			self.db_set("status", "Checked In")
 
@@ -580,6 +817,22 @@ class HotelBooking(Document):
 		# their own reservations is pointless and the date move was validated upstream.
 		self.flags.skip_room_validation = True
 		self.save(ignore_permissions=True)
+		# Every re-date of a stay (form edit, extend, shorten, early check-out, audit)
+		# comes through here, so the CRM enquiry is kept on the real stay from here too.
+		self.sync_enquiry_dates()
+
+	def sync_enquiry_dates(self):
+		"""Keep the CRM enquiry showing the stay that is actually booked."""
+		if not self.enquiry or not frappe.db.exists("Hotel Enquiry", self.enquiry):
+			return
+		enquiry = frappe.get_doc("Hotel Enquiry", self.enquiry)
+		if (str(enquiry.check_in_date) == str(getdate(self.arrival_date))
+				and str(enquiry.check_out_date) == str(getdate(self.departure_date))):
+			return
+		enquiry.check_in_date = self.arrival_date
+		enquiry.check_out_date = self.departure_date
+		enquiry.flags.from_booking = True
+		enquiry.save(ignore_permissions=True)
 
 	def change_dates(self, arrival_date, departure_date):
 		"""Move a booking that has not arrived yet to new dates.
@@ -592,9 +845,10 @@ class HotelBooking(Document):
 		arrival_date, departure_date = getdate(arrival_date), getdate(departure_date)
 		if departure_date <= arrival_date:
 			frappe.throw(_("Departure must be after arrival."))
-		if self.status not in ("Draft", "Tentative", "Confirmed"):
+		if self.status not in ("Draft", "Tentative", "Confirmed", "No Show"):
 			frappe.throw(_("Only a booking that has not checked in can change dates. "
 			               "Use Extend Stay on the reservation for a guest in house."))
+		revive = self.status == "No Show"
 
 		old = (self.arrival_date, self.departure_date)
 		old_total = flt(self.total_amount)
@@ -650,6 +904,15 @@ class HotelBooking(Document):
 		if moved:
 			note += " " + _("Rooms reassigned: {0}.").format(", ".join(moved))
 		self.add_comment("Info", note)
+
+		# A no-show moved to new dates is a live booking again.
+		if revive:
+			for line in self.rooms:
+				if line.reservation and frappe.db.get_value("Hotel Reservation", line.reservation, "status") == "No Show":
+					frappe.db.set_value("Hotel Reservation", line.reservation, "status", "Reserved")
+			self.db_set("status", "Confirmed")
+
+		self.sync_enquiry_dates()
 		return {
 			"total_amount": self.total_amount,
 			"previous_total": old_total,

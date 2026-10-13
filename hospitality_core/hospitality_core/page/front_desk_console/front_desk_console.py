@@ -63,6 +63,27 @@ def get_console_data(target_date=None):
 		as_dict=True,
 	)
 
+	# 1b. Bookings arriving that day which are still on hold (no reservation yet).
+	# They were invisible here, so a hold for today could be missed at the desk.
+	holds = frappe.db.sql(
+		"""
+        SELECT b.name, b.guest_name, b.mobile_no, b.arrival_date, b.arrival_time,
+               (SELECT GROUP_CONCAT(IFNULL(NULLIF(l.room, ''), l.room_type) SEPARATOR ', ')
+                  FROM `tabHotel Booking Room` l WHERE l.parent = b.name) AS room,
+               (SELECT GROUP_CONCAT(DISTINCT l.room_type SEPARATOR ', ')
+                  FROM `tabHotel Booking Room` l WHERE l.parent = b.name) AS room_type
+        FROM `tabHotel Booking` b
+        WHERE b.status IN ('Draft', 'Tentative') AND b.arrival_date = %s
+          AND NOT EXISTS (SELECT 1 FROM `tabHotel Booking Room` l
+                          WHERE l.parent = b.name AND IFNULL(l.reservation, '') != '')
+    """,
+		(target_date,),
+		as_dict=True,
+	)
+	for h in holds:
+		h.update({"status": "Hold", "kind": "booking"})
+	arrivals = list(arrivals) + holds
+
 	# 2. Fetch Departures for specific date. Today's list also carries guests nobody
 	# checked out yet: their stay is over and the room is free, but the desk still has
 	# to settle and close them.
@@ -101,7 +122,7 @@ def get_console_data(target_date=None):
 
 	# Arrivals Pending (Reserved for this date)
 	# These represent potential In-House guests for tonight who haven't arrived yet.
-	arrivals_pending = len([a for a in arrivals if a.status == "Reserved"])
+	arrivals_pending = len([a for a in arrivals if a.status in ("Reserved", "Hold")])
 
 	# Departures Pending (Checked In with departure on this date)
 	# These are guests physically present right now but expected to leave.

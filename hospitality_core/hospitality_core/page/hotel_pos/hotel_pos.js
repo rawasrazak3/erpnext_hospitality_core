@@ -338,6 +338,16 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
 
     var $main = $(wrapper).find('.layout-main-section');
     $main.html(build_layout());
+
+    // Dates show as dd/mm/yy; the value the server gets stays YYYY-MM-DD (data-iso).
+    init_pos_date('#pos-arr', function(iso){
+        // Check-out always after check-in: move it on if check-in passes it.
+        if(iso >= pos_date_val('#pos-dep')){ set_pos_date('#pos-dep', frappe.datetime.add_days(iso, 1)); }
+    });
+    init_pos_date('#pos-dep', function(iso){
+        if(iso <= pos_date_val('#pos-arr')){ set_pos_date('#pos-dep', frappe.datetime.add_days(pos_date_val('#pos-arr'), 1)); }
+    });
+    init_pos_date('#pos-arr-date');
     $(wrapper).find('.page-head').hide();
 
     // Setup guest link field
@@ -449,7 +459,7 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
             $('#pos-arr-list').html('<div class="cart-empty"><div class="icon">⏳</div>Loading arrivals...</div>');
             frappe.call({
                 method:'hospitality_core.hospitality_core.page.hotel_pos.hotel_pos.get_arrivals',
-                args:{ date: $('#pos-arr-date').val(), search: $('#pos-arr-q').val() },
+                args:{ date: pos_date_val('#pos-arr-date'), search: $('#pos-arr-q').val() },
                 callback: function(r){
                     if(r.message){ self.render_arrivals(r.message); }
                 }
@@ -601,8 +611,8 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
         },
 
         on_search: function(){
-            this.state.arrival = $('#pos-arr').val();
-            this.state.departure = $('#pos-dep').val();
+            this.state.arrival = pos_date_val('#pos-arr');
+            this.state.departure = pos_date_val('#pos-dep');
             // Times are the property's standard check-in/check-out (settings), not typed.
             this.state.arrival_time = '';
             this.state.departure_time = '';
@@ -630,7 +640,14 @@ frappe.pages['hotel-pos'].on_page_load = function(wrapper) {
                         self.state.rooms = r.message.rooms || [];
                         self.state.room_types = r.message.room_types || [];
                         self.state.held = r.message.held || {};
-                        var t = frappe.hospitality.stay.fmt_time;
+                        // The room grid must draw even if a browser is still running an
+                        // older shared front_desk.js, so format the time locally if needed.
+                        var t = (frappe.hospitality && frappe.hospitality.stay && frappe.hospitality.stay.fmt_time) ||
+                            function(v){
+                                if(!v) return '';
+                                var p = String(v).split(':'), h = parseInt(p[0], 10) || 0, m = parseInt(p[1], 10) || 0;
+                                return ((h + 11) % 12 + 1) + ':' + (m < 10 ? '0' : '') + m + (h >= 12 ? ' PM' : ' AM');
+                            };
                         $('#pos-stay-times').text(__('Check-in {0} · Check-out {1}', [t(r.message.check_in_time), t(r.message.check_out_time)]));
                         self.render_tabs();
                         self.render_grid();
@@ -1255,6 +1272,67 @@ frappe.pages['hotel-pos'].on_page_show = function(){
     }
 };
 
+/* ---------------------------------------------------------------- dd/mm/yy dates
+ * A native <input type="date"> shows whatever format the computer's locale uses
+ * (mm/dd/yyyy on many). These fields show dd/mm/yy instead, with Frappe's own date
+ * picker, and keep the real value as YYYY-MM-DD in data-iso for the server. */
+function pos_iso(d){
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function pos_fmt(iso){
+    if(!iso) return '';
+    var p = iso.split('-');
+    return p[2] + '/' + p[1] + '/' + p[0].slice(2);
+}
+/* Typed text: dd/mm/yy, dd/mm/yyyy, dd-mm-yy or dd.mm.yyyy. Null if not a real date. */
+function pos_parse(text){
+    var m = String(text || '').trim().match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})$/);
+    if(!m) return null;
+    var y = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+    var d = new Date(y, parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+    if(d.getDate() !== parseInt(m[1], 10) || d.getMonth() !== parseInt(m[2], 10) - 1) return null;
+    return pos_iso(d);
+}
+function pos_date_val(sel){
+    return $(sel).attr('data-iso') || '';
+}
+function set_pos_date(sel, iso){
+    var $el = $(sel);
+    $el.attr('data-iso', iso).val(pos_fmt(iso));
+    var dp = $el.data('datepicker');
+    if(dp){ dp.selectDate(new Date(iso + 'T00:00:00'), { silent: true }); }
+}
+function init_pos_date(sel, on_change){
+    var $el = $(sel);
+    var commit = function(iso){
+        if(!iso) { $el.val(pos_fmt(pos_date_val(sel))); return; }   // not a date: put the last good one back
+        var changed = iso !== pos_date_val(sel);
+        $el.attr('data-iso', iso).val(pos_fmt(iso));
+        if(changed && on_change) on_change(iso);
+    };
+    $el.val(pos_fmt(pos_date_val(sel)));
+    if($.fn.datepicker){
+        var lang = (frappe.boot.user && frappe.boot.user.language) || 'en';
+        if(!$.fn.datepicker.language[lang]) lang = 'en';
+        $el.datepicker({
+            language: lang,
+            autoClose: true,
+            todayButton: new Date(),
+            keyboardNav: false,
+            dateFormat: 'dd/mm/yy',
+            firstDay: frappe.datetime.get_first_day_of_the_week_index ? frappe.datetime.get_first_day_of_the_week_index() : 1,
+            onSelect: function(_fd, date){ if(date) commit(pos_iso(date)); }
+        });
+        var dp = $el.data('datepicker');
+        if(dp && pos_date_val(sel)){ dp.selectDate(new Date(pos_date_val(sel) + 'T00:00:00')); }
+    }
+    $el.on('change blur', function(){
+        var typed = pos_parse($el.val());
+        if(typed){ if(typed !== pos_date_val(sel)) commit(typed); }
+        else { $el.val(pos_fmt(pos_date_val(sel))); }
+    });
+}
+
 var RT_HUES = 8;
 
 function type_hue(name, types){
@@ -1287,9 +1365,9 @@ function build_layout(){
           '</div>'+
         '</div>'+
         '<div class="hpos-filters">'+
-          '<div class="hpos-fg"><label>Check-in</label><input type="date" id="pos-arr" value="'+today+'"></div>'+
+          '<div class="hpos-fg"><label>Check-in</label><input type="text" class="pos-date" id="pos-arr" data-iso="'+today+'" autocomplete="off" placeholder="dd/mm/yy" style="width:110px"></div>'+
 
-          '<div class="hpos-fg"><label>Check-out</label><input type="date" id="pos-dep" value="'+tomorrow+'"></div>'+
+          '<div class="hpos-fg"><label>Check-out</label><input type="text" class="pos-date" id="pos-dep" data-iso="'+tomorrow+'" autocomplete="off" placeholder="dd/mm/yy" style="width:110px"></div>'+
           '<div class="hpos-fg"><label>'+__('Times')+'</label><div id="pos-stay-times" style="height:30px;line-height:30px;font-size:var(--text-sm,12px);color:var(--dim);white-space:nowrap"></div></div>'+
           '<div class="hpos-fg"><label>Adults</label><input type="number" id="pos-adults" value="1" min="1" max="30" style="width:70px"></div>'+
           '<div class="hpos-fg"><label>Children</label><input type="number" id="pos-children" value="0" min="0" max="30" style="width:70px"></div>'+
@@ -1306,7 +1384,7 @@ function build_layout(){
         '<div class="hpos-grid" id="pos-grid"></div>'+
         '<div class="hpos-arrivals" id="pos-arrivals" style="display:none">'+
           '<div class="hpos-arr-search">'+
-            '<input type="date" id="pos-arr-date" value="'+today+'">'+
+            '<input type="text" class="pos-date" id="pos-arr-date" data-iso="'+today+'" autocomplete="off" placeholder="dd/mm/yy">'+
             '<input type="search" id="pos-arr-q" placeholder="Search name, phone or booking no">'+
             '<button class="hpos-btn hpos-btn-primary" id="pos-arr-refresh">Find</button>'+
           '</div>'+

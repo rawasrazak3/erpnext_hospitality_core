@@ -851,3 +851,39 @@
 	font-size: 15px;
 	color: var(--text-color, #0f172a);
 }
+
+/* Rooms are offered by room; the type sits under the picker so the agent still sees
+   which category (and so which tariff) the room belongs to. */
+.hcrm-rooms-tools { display: inline-flex; gap: 6px; align-items: center; text-transform: none; letter-spacing: 0; }
+.hcrm-rooms-tools select { height: 24px; padding: 0 6px; font-size: var(--text-xs, 11px); width: auto; max-width: 170px; }
+.hcrm-line-type {
+	font-size: var(--text-xs, 11px);
+	font-weight: 600;
+	color: var(--text-color, #1f272e);
+	margin-top: 3px;
+}
+.hcrm-line-warn {
+	font-size: var(--text-xs, 11px);
+	color: var(--red-600, #dc2626);
+	font-weight: 600;
+	margin-top: 2px;
+}
+.hcrm-line-rival {
+	font-size: var(--text-xs, 11px);
+	color: var(--text-on-orange, var(--orange-700, #b45309));
+	margin-top: 2px;
+}
+.hcrm-row-type { color: var(--text-muted, #6b7280); font-weight: 400; }
+.hcrm-bf-label-room { margin-left: 10px; }
+
+/* A guest who already has a booking: shown before booking again. */
+.hcrm-dup-warn {
+	background: var(--bg-orange, #fff7ed);
+	color: var(--text-on-orange, #7c2d12);
+	border-radius: var(--border-radius-md, 8px);
+	padding: 10px 12px;
+	font-size: var(--text-sm, 12px);
+	margin-bottom: 8px;
+}
+.hcrm-dup-warn ul { margin: 6px 0; padding-left: 18px; }
+.hcrm-dup-warn a { color: inherit; text-decoration: underline; }

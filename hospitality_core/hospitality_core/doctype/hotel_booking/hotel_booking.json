@@ -98,7 +98,9 @@
    "label": "Status",
    "no_copy": 1,
    "options": "Draft\nTentative\nConfirmed\nChecked In\nCompleted\nCancelled\nNo Show",
-   "reqd": 1
+   "reqd": 1,
+   "read_only": 1,
+   "description": "Changed by the buttons (Place Hold, Confirm Booking, Check In, Cancel), which also create, move and release the reservations."
   },
   {
    "fieldname": "enquiry",
@@ -332,7 +334,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-16 12:00:00.000000",
+ "modified": "2026-10-11 11:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hotel Booking",

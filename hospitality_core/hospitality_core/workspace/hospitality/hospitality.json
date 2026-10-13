@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"PGjvONo0N1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Front Desk</b></span>\", \"col\": 12}}, {\"id\": \"Fn1hXCBiq8\", \"type\": \"paragraph\", \"data\": {\"text\": \"<span class=\\\"text-muted\\\">Guest journey: Enquiry \\u2192 Booking (hold / confirm, advance) \\u2192 Check In \\u2192 Stay (extend, move) \\u2192 Check Out (settle, GST invoice, bill).</span>\", \"col\": 12}}, {\"id\": \"gstboard01\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Guests\", \"col\": 3}}, {\"id\": \"3LkOIZs9hs\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Front Desk Console\", \"col\": 3}}, {\"id\": \"dXh6zLDSD7\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Hotel POS\", \"col\": 3}}, {\"id\": \"TVNjPwAwBt\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Tape Chart\", \"col\": 3}}, {\"id\": \"K5ZzWmEOoy\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Housekeeping Board\", \"col\": 3}}, {\"id\": \"LK3xDDIfGi\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Arrivals Today\", \"col\": 3}}, {\"id\": \"I4EJPfEMzD\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"In House\", \"col\": 3}}, {\"id\": \"bkpxpOniJh\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Due Out Today\", \"col\": 3}}, {\"id\": \"kYvRqUBtV9\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Guest Folios\", \"col\": 3}}, {\"id\": \"S1tiznPqx6\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"hQyGKCHCw2\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Sales</b></span>\", \"col\": 12}}, {\"id\": \"P3U9SIJTd1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Hotel CRM\", \"col\": 3}}, {\"id\": \"82IrvvzlTl\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Enquiries\", \"col\": 3}}, {\"id\": \"v6GvS28dtn\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Bookings\", \"col\": 3}}, {\"id\": \"OLdMC7cIai\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Call History\", \"col\": 3}}, {\"id\": \"rDngb16D2l\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"SKBhlOevEs\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Billing</b></span>\", \"col\": 12}}, {\"id\": \"v4kbq9MEZV\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sales Invoices\", \"col\": 3}}, {\"id\": \"9UtYLql3wJ\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Payments\", \"col\": 3}}, {\"id\": \"TfTQ0jiFQ8\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Analytics\", \"col\": 3}}, {\"id\": \"qbFpM74Ijn\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"Y30tc86V3Q\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Everything else</b></span>\", \"col\": 12}}, {\"id\": \"kxJJR7h2af\", \"type\": \"card\", \"data\": {\"card_name\": \"Bookings & Stays\", \"col\": 4}}, {\"id\": \"jMWtyNlh4o\", \"type\": \"card\", \"data\": {\"card_name\": \"Billing & Accounts\", \"col\": 4}}, {\"id\": \"ZCvI9qEapx\", \"type\": \"card\", \"data\": {\"card_name\": \"Front Office Reports\", \"col\": 4}}, {\"id\": \"aFvN5YAyaL\", \"type\": \"card\", \"data\": {\"card_name\": \"Sales Reports\", \"col\": 4}}, {\"id\": \"siSey90L29\", \"type\": \"card\", \"data\": {\"card_name\": \"Finance Reports\", \"col\": 4}}, {\"id\": \"piu8liu2PT\", \"type\": \"card\", \"data\": {\"card_name\": \"Operations\", \"col\": 4}}, {\"id\": \"KkM08ReLP1\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}]",
+ "content": "[{\"id\": \"PGjvONo0N1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Front Desk</b></span>\", \"col\": 12}}, {\"id\": \"Fn1hXCBiq8\", \"type\": \"paragraph\", \"data\": {\"text\": \"<span class=\\\"text-muted\\\">Guest journey: Enquiry \\u2192 Booking (hold / confirm, advance) \\u2192 Check In \\u2192 Stay (extend, move) \\u2192 Check Out (settle, GST invoice, bill).</span>\", \"col\": 12}}, {\"id\": \"gstboard01\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Guests\", \"col\": 3}}, {\"id\": \"3LkOIZs9hs\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Front Desk Console\", \"col\": 3}}, {\"id\": \"dXh6zLDSD7\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Hotel POS\", \"col\": 3}}, {\"id\": \"TVNjPwAwBt\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Tape Chart\", \"col\": 3}}, {\"id\": \"K5ZzWmEOoy\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Housekeeping Board\", \"col\": 3}}, {\"id\": \"LK3xDDIfGi\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Arrivals Today\", \"col\": 3}}, {\"id\": \"I4EJPfEMzD\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"In House\", \"col\": 3}}, {\"id\": \"bkpxpOniJh\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Due Out Today\", \"col\": 3}}, {\"id\": \"kYvRqUBtV9\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Guest Folios\", \"col\": 3}}, {\"id\": \"S1tiznPqx6\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"hQyGKCHCw2\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Sales</b></span>\", \"col\": 12}}, {\"id\": \"P3U9SIJTd1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Hotel CRM\", \"col\": 3}}, {\"id\": \"82IrvvzlTl\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Enquiries\", \"col\": 3}}, {\"id\": \"v6GvS28dtn\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Bookings\", \"col\": 3}}, {\"id\": \"OLdMC7cIai\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Call History\", \"col\": 3}}, {\"id\": \"rDngb16D2l\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"SKBhlOevEs\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Sales &amp; Billing</b></span>\", \"col\": 12}}, {\"id\": \"salesdash01\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sales Dashboard\", \"col\": 3}}, {\"id\": \"v4kbq9MEZV\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sales Invoices\", \"col\": 3}}, {\"id\": \"9UtYLql3wJ\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Payments\", \"col\": 3}}, {\"id\": \"TfTQ0jiFQ8\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Analytics\", \"col\": 3}}, {\"id\": \"qbFpM74Ijn\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"Y30tc86V3Q\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Everything else</b></span>\", \"col\": 12}}, {\"id\": \"kxJJR7h2af\", \"type\": \"card\", \"data\": {\"card_name\": \"Bookings & Stays\", \"col\": 4}}, {\"id\": \"jMWtyNlh4o\", \"type\": \"card\", \"data\": {\"card_name\": \"Billing & Accounts\", \"col\": 4}}, {\"id\": \"ZCvI9qEapx\", \"type\": \"card\", \"data\": {\"card_name\": \"Front Office Reports\", \"col\": 4}}, {\"id\": \"aFvN5YAyaL\", \"type\": \"card\", \"data\": {\"card_name\": \"Sales Reports\", \"col\": 4}}, {\"id\": \"siSey90L29\", \"type\": \"card\", \"data\": {\"card_name\": \"Finance Reports\", \"col\": 4}}, {\"id\": \"piu8liu2PT\", \"type\": \"card\", \"data\": {\"card_name\": \"Operations\", \"col\": 4}}, {\"id\": \"KkM08ReLP1\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}]",
  "creation": "2026-01-17 20:44:38.076236",
  "custom_blocks": [],
  "docstatus": 0,
@@ -256,13 +256,27 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Front Office Reports",
-   "link_count": 7,
+   "link_count": 8,
    "link_to": null,
    "link_type": null,
    "onboard": 0,
    "only_for": null,
    "report_ref_doctype": null,
    "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "description": null,
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Booking Health Check",
+   "link_count": 0,
+   "link_to": "Booking Health Check",
+   "link_type": "Report",
+   "onboard": 0,
+   "only_for": null,
+   "report_ref_doctype": "Hotel Booking",
+   "type": "Link"
   },
   {
    "dependencies": "",
@@ -466,13 +480,27 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Finance Reports",
-   "link_count": 9,
+   "link_count": 10,
    "link_to": null,
    "link_type": null,
    "onboard": 0,
    "only_for": null,
    "report_ref_doctype": null,
    "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "description": null,
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Hotel Sales Report",
+   "link_count": 0,
+   "link_to": "Hotel Sales Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "only_for": null,
+   "report_ref_doctype": "Guest Folio",
+   "type": "Link"
   },
   {
    "dependencies": "",
@@ -853,7 +881,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-09-27 14:00:00.000000",
+ "modified": "2026-10-11 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hospitality Core",
  "name": "Hospitality",
@@ -877,6 +905,16 @@
  ],
  "sequence_id": 1.0,
  "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "format": null,
+   "label": "Sales Dashboard",
+   "link_to": "sales-dashboard",
+   "stats_filter": null,
+   "type": "Page",
+   "url": null
+  },
   {
    "color": "Grey",
    "doc_view": "",

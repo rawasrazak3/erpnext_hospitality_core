@@ -218,6 +218,13 @@ frappe.ui.form.on("Hotel Enquiry", {
 });
 
 frappe.ui.form.on("Enquiry Room Line", {
+	/* Choosing a room fills its type (fetch_from), which re-quotes the line; a room
+	 * line is always exactly one room. */
+	room(frm, cdt, cdn) {
+		const row = locals[cdt][cdn];
+		if (row.room && cint(row.qty) !== 1) frappe.model.set_value(cdt, cdn, "qty", 1);
+	},
+
 	room_type(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
 		if (!row.room_type) return;

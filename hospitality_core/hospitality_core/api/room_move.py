@@ -44,6 +44,16 @@ def process_room_move(reservation_name, new_room):
     if res.folio:
         frappe.db.set_value("Guest Folio", res.folio, "room", new_room)
 
+    # Keep the booking's room line on the same room, and reprice the booking for the
+    # new room's tariff on the nights still to come.
+    if res.get("hotel_booking"):
+        frappe.db.set_value(
+            "Hotel Booking Room", {"parent": res.hotel_booking, "reservation": res.name},
+            {"room": new_room, "room_type": new_room_type or res.room_type},
+        )
+        res.reload()
+        res.sync_parent_booking()
+
     # 3. Room statuses from who is actually in each room now.
     from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import refresh_room_status
     refresh_room_status(old_room)

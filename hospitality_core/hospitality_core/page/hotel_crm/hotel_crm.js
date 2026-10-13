@@ -380,10 +380,14 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 
 						<div class="hcrm-card">
 							<div class="hcrm-card-title">
-								<span>${__('Rooms Requested')}</span>
-								<button class="btn btn-xs btn-default" id="hcrm-add-line">
-									${__('Add Room')}
-								</button>
+								<span>${__('Rooms')}</span>
+								<span class="hcrm-rooms-tools">
+									<select class="form-control input-xs" id="hcrm-room-filter"
+										title="${__('Show only rooms of this type in the room picker')}"></select>
+									<button class="btn btn-xs btn-default" id="hcrm-add-line">
+										${__('Add Room')}
+									</button>
+								</span>
 							</div>
 							<div id="hcrm-lines-wrap"></div>
 						</div>
@@ -413,6 +417,20 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			$('#hcrm-save').on('click', () => this.save());
 			$('#hcrm-followup').on('click', () => this.follow_up_dialog());
 			$('#hcrm-add-line').on('click', () => this.add_line());
+			// Narrows the room picker to one category; the room chosen still decides
+			// the type of each line.
+			$('#hcrm-room-filter')
+				.html(
+					`<option value="">${__('All room types')}</option>` +
+						(this.state.masters.room_types || [])
+							.map((t) => `<option value="${frappe.utils.escape_html(t.name)}">${frappe.utils.escape_html(t.name)}</option>`)
+							.join('')
+				)
+				.val(this.state.room_filter || '')
+				.on('change', (e) => {
+					this.state.room_filter = $(e.currentTarget).val() || '';
+					this.render_lines();
+				});
 			$('#hcrm-book').on('click', () => this.booking_dialog());
 
 			this.state.built = true;
@@ -922,23 +940,52 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			$('#hcrm-lines-wrap .hcrm-total').text(format_currency(this.quote_total()));
 		},
 
+		/* Whether a room is free for the dates on screen, from the availability payload,
+		 * and which other open enquiries are offering it. Null when no dates yet. */
+		room_state(room) {
+			const data = this._availData;
+			if (!room || !data || data.error || !data.rooms) return null;
+			const r = data.rooms.find((x) => x.name === room);
+			const rivals = ((data.contention || {}).by_room || {})[room] || [];
+			if (!r) return { free: false, reason: __('Not available'), rivals };
+			return { free: !!r.available, reason: r.blocked_by || '', rivals };
+		},
+
+		/* Rooms the picker offers: the type filter applied, but a row's own room is
+		 * always kept so changing the filter never silently drops a choice. */
+		room_choices(current) {
+			const filter = this.state.room_filter || '';
+			return (this.state.masters.rooms || []).filter(
+				(r) => !filter || r.room_type === filter || r.name === current
+			);
+		},
+
 		add_line() {
-			const types = this.state.masters.room_types || [];
-			if (!types.length) {
-				frappe.msgprint(__('No Hotel Room Types are set up yet.'));
+			const rooms = this.room_choices();
+			if (!rooms.length) {
+				frappe.msgprint(__('No rooms are set up for this room type.'));
 				return;
 			}
-			const first = types[0];
+			const taken = new Set(((this.state.doc && this.state.doc.room_lines) || []).map((l) => l.room));
+			// The first room not already on this enquiry that is free for the dates;
+			// failing that, the first one not on it.
+			const pick =
+				rooms.find((r) => !taken.has(r.name) && (this.room_state(r.name) || { free: true }).free) ||
+				rooms.find((r) => !taken.has(r.name)) ||
+				rooms[0];
+			const type = (this.state.masters.room_types || []).find((x) => x.name === pick.room_type) || {};
+
 			this.state.doc.room_lines = this.state.doc.room_lines || [];
 			this.state.doc.room_lines.push({
-				room_type: first.name,
+				room: pick.name,
+				room_type: pick.room_type,
 				qty: 1,
 				adults: 2,
 				children: 0,
 				// Seeded from the tariff only when the engine cannot be asked. With real
 				// dates on screen the weekday tariff would flash into the box and then be
 				// replaced by the weekend one, which reads as the rate moving by itself.
-				rate_quoted: this.can_quote() ? 0 : first.default_rate || 0,
+				rate_quoted: this.can_quote() ? 0 : type.default_rate || 0,
 				is_rate_overridden: 0,
 				extra_beds_adult: 0,
 				extra_beds_child: 0,
@@ -964,17 +1011,59 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				return;
 			}
 
+			const esc = frappe.utils.escape_html;
+			const others = (i) => new Set(lines.filter((_, j) => j !== i).map((x) => x.room).filter(Boolean));
+
 			const rows = lines
 				.map((l, i) => {
-					const opts = types
-						.map(
-							(t) =>
-								`<option value="${frappe.utils.escape_html(t.name)}" ${
-									t.name === l.room_type ? 'selected' : ''
-								}>${frappe.utils.escape_html(t.name)}</option>`
-						)
-						.join('');
+					// Rooms grouped by type, each marked for the dates on screen.
+					const used = others(i);
+					const groups = {};
+					this.room_choices(l.room).forEach((r) => {
+						(groups[r.room_type] = groups[r.room_type] || []).push(r);
+					});
+					const legacy = !l.room
+						? `<option value="" selected>${esc(__('Any {0}', [l.room_type || '']))}${
+								cint(l.qty) > 1 ? ' ×' + cint(l.qty) : ''
+						  } — ${esc(__('choose a room'))}</option>`
+						: '';
+					const opts =
+						legacy +
+						Object.keys(groups)
+							.map((type) => {
+								const options = groups[type]
+									.map((r) => {
+										const st = this.room_state(r.name);
+										let tag = '';
+										if (used.has(r.name)) tag = ' — ' + __('on this enquiry');
+										else if (st && !st.free) tag = ' — ' + __('booked');
+										else if (st && st.rivals.length) tag = ' — ' + __('also offered ×{0}', [st.rivals.length]);
+										else if (st) tag = ' — ' + __('free');
+										return `<option value="${esc(r.name)}" ${r.name === l.room ? 'selected' : ''}${
+											used.has(r.name) ? ' disabled' : ''
+										}>${esc(r.name)}${esc(tag)}</option>`;
+									})
+									.join('');
+								return `<optgroup label="${esc(type)}">${options}</optgroup>`;
+							})
+							.join('');
+
 					const t = types.find((x) => x.name === l.room_type) || {};
+					// What the picked room is, and whether it can be had for these dates.
+					const st = this.room_state(l.room);
+					let room_warn = '';
+					if (l.room && st && !st.free) {
+						room_warn = `<div class="hcrm-line-warn">${esc(__('Not free for these dates'))}${
+							st.reason ? ' · ' + esc(st.reason) : ''
+						}</div>`;
+					} else if (l.room && st && st.rivals.length) {
+						room_warn = `<div class="hcrm-line-rival">${esc(
+							__('Also offered to: {0}', [st.rivals.slice(0, 3).join(', ')])
+						)}</div>`;
+					}
+					const type_line = l.room_type
+						? `<div class="hcrm-line-type">${esc(l.room_type)}</div>`
+						: '';
 					const cap = cint(t.max_occupancy) * Math.max(cint(l.qty) || 1, 1);
 					const heads = (cint(l.adults) || 0) + (cint(l.children) || 0);
 					const over = cap && heads > cap;
@@ -1001,9 +1090,9 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 							: '';
 
 					return `<tr data-i="${i}">
-						<td><select class="form-control input-sm l-room_type">${opts}</select>
-							${meta ? `<div class="hcrm-line-meta">${meta}</div>` : ''}${wknd}${bed_note}</td>
-						<td><input type="number" min="1" class="form-control input-sm l-qty" value="${l.qty || 1}"></td>
+						<td><select class="form-control input-sm l-room">${opts}</select>
+							${type_line}
+							${meta ? `<div class="hcrm-line-meta">${meta}</div>` : ''}${wknd}${bed_note}${room_warn}</td>
 						<td><input type="number" min="0" class="form-control input-sm l-adults" value="${
 							l.adults || 2
 						}"${over ? ` title="${__('Over the {0} this category sleeps — extra beds added', [cap])}"` : ''}></td>
@@ -1026,17 +1115,16 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			$('#hcrm-lines-wrap').html(`
 				<table class="hcrm-lines">
 					<thead><tr>
-						<th style="width:34%">${__('Room Type')}</th>
-						<th style="width:10%">${__('Rooms')}</th>
-						<th style="width:10%">${__('Adults')}</th>
-						<th style="width:10%">${__('Children')}</th>
+						<th style="width:40%">${__('Room')}</th>
+						<th style="width:12%">${__('Adults')}</th>
+						<th style="width:12%">${__('Children')}</th>
 						<th style="width:16%">${__('Rate / Night')}</th>
 						<th style="width:16%" class="num">${__('Amount')}</th>
 						<th style="width:4%"></th>
 					</tr></thead>
 					<tbody>${rows}</tbody>
 					<tfoot><tr>
-						<td colspan="5" class="num hcrm-total-label">${__('Subtotal')}</td>
+						<td colspan="4" class="num hcrm-total-label">${__('Subtotal')}</td>
 						<td class="num hcrm-subtotal">${format_currency(this.quote_subtotal())}</td>
 						<td></td>
 					</tr></tfoot>
@@ -1083,6 +1171,30 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 					if (!field || i == null) return;
 					const key = field.slice(2);
 					const line = d.room_lines[i];
+
+					if (key === 'room') {
+						// The room decides the type. A room line is always one room.
+						const room = (this.state.masters.rooms || []).find((x) => x.name === $el.val());
+						if (!room) return;
+						const changed_type = room.room_type !== line.room_type;
+						line.room = room.name;
+						line.qty = 1;
+						if (changed_type) {
+							line.room_type = room.room_type;
+							const t = (this.state.masters.room_types || []).find((x) => x.name === room.room_type);
+							// A rate agreed by hand survives; a tariff rate is re-quoted
+							// for the new category.
+							if (t && !cint(line.is_rate_overridden)) {
+								line.rate_quoted = this.can_quote() ? 0 : flt(t.default_rate);
+							}
+						}
+						this.render_lines();
+						if (changed_type) this.refresh_line_rate(i);
+						this.mark_dirty();
+						this.update_header();
+						this.refresh_availability_need();
+						return;
+					}
 
 					line[key] = key === 'room_type' ? $el.val() : Number($el.val());
 
@@ -1275,6 +1387,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				this._availData = null;
 				this._availKey = null;
 				$('#hcrm-avail').empty();
+				if (!$('#hcrm-lines-wrap').find(':focus').length) this.render_lines();
 				return;
 			}
 			// Cheap guard against re-querying the same window on every keystroke.
@@ -1298,6 +1411,10 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 					if (this._availKey !== key) return; // a newer request won
 					this._availData = r.message;
 					this.render_availability(r.message);
+					// The room picker marks each room free / booked for these dates.
+					// Redraw it now — unless the agent is typing in a row, in which case
+					// the next redraw picks the marks up.
+					if (!$('#hcrm-lines-wrap').find(':focus').length) this.render_lines();
 				},
 			});
 		},
@@ -1420,12 +1537,52 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 			this.open_booking_dialog();
 		},
 
+		/* Before booking, look for bookings this guest already has. A caller with a
+		 * booking usually wants to change it; booking again left the old room blocked
+		 * and the advance recorded twice. */
 		open_booking_dialog() {
 			if (!this.state.selected) return;
+			frappe
+				.call({
+					method: 'hospitality_core.hospitality_core.page.hotel_crm.hotel_crm.get_live_bookings_for_enquiry',
+					args: { enquiry: this.state.selected },
+				})
+				.then((r) => this._booking_dialog(r.message || []));
+		},
+
+		_booking_dialog(existing) {
+			const esc = frappe.utils.escape_html;
+			const warn = existing.length
+				? [
+						{
+							fieldtype: 'HTML',
+							fieldname: 'existing',
+							options: `<div class="hcrm-dup-warn">
+								<b>${__('This guest already has {0} booking(s)', [existing.length])}</b>
+								<ul>${existing
+									.map(
+										(b) => `<li><a href="/app/hotel-booking/${encodeURIComponent(b.name)}" target="_blank">${esc(b.name)}</a>
+											· ${esc(b.rooms || '')} · ${frappe.datetime.str_to_user(b.arrival_date)} → ${frappe.datetime.str_to_user(b.departure_date)}
+											· ${esc(b.status)}${flt(b.advance_received) ? ' · ' + __('advance {0}', [format_currency(b.advance_received)]) : ''}${
+											b.enquiry ? ` · <a href="#" class="hcrm-dup-open" data-enquiry="${esc(b.enquiry)}">${__('open its enquiry')}</a>` : ''
+										}</li>`
+									)
+									.join('')}</ul>
+								${__('To change those dates, open that enquiry and change the dates there (the booking moves with them), or use Change Dates on the booking. Do not take the advance again.')}
+							</div>`,
+						},
+						{
+							fieldtype: 'Check',
+							fieldname: 'additional_stay',
+							label: __('This is a separate, additional stay (not a date change)'),
+						},
+						{ fieldtype: 'Section Break' },
+				  ]
+				: [];
 
 			const dlg = new frappe.ui.Dialog({
 				title: __('Create Booking'),
-				fields: [
+				fields: warn.concat([
 					{
 						fieldname: 'action',
 						label: __('Action'),
@@ -1459,12 +1616,21 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 						fieldtype: 'Data',
 						depends_on: 'advance_amount',
 					},
-				],
+				]),
 				primary_action_label: __('Create'),
 				primary_action: (values) => {
+					if (existing.length && !values.additional_stay) {
+						frappe.msgprint(__('Tick “separate, additional stay” to book again, or change the existing booking instead.'));
+						return;
+					}
 					dlg.hide();
 					this.create_booking(values);
 				},
+			});
+			dlg.$wrapper.on('click', '.hcrm-dup-open', (e) => {
+				e.preventDefault();
+				dlg.hide();
+				this.open($(e.currentTarget).data('enquiry'));
 			});
 			dlg.show();
 		},
@@ -1477,6 +1643,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 					enquiry: this.state.selected,
 					action: values.action,
 					hold_hours: values.hold_hours || 24,
+					additional_stay: values.additional_stay ? 1 : 0,
 				},
 				freeze: true,
 				freeze_message: __('Creating booking…'),
@@ -1574,7 +1741,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 
 		render_board_filters() {
 			const f = this.state.board_filter || (this.state.board_filter = {
-				preset: 'all', date_field: 'enquired', from: null, to: null, room_type: null,
+				preset: 'all', date_field: 'enquired', from: null, to: null, room_type: null, room: null,
 			});
 			const presets = this.board_presets()
 				.map(
@@ -1628,6 +1795,10 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				this.render_room_chips();
 				this.load_board();
 			});
+			$f.on('change', '#hcrm-bf-room', (e) => {
+				this.state.board_filter.room = $(e.currentTarget).val() || null;
+				this.load_board();
+			});
 			$f.on('change', '#hcrm-bf-from, #hcrm-bf-to', () => {
 				const f = this.state.board_filter;
 				f.from = $('#hcrm-bf-from').val() || null;
@@ -1644,7 +1815,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 		render_room_chips() {
 			const f = this.state.board_filter;
 			const demand = this.state.room_demand || [];
-			if (!demand.length) return $('#hcrm-bf-rooms').empty();
+			if (!demand.length && !(this.state.masters.rooms || []).length) return $('#hcrm-bf-rooms').empty();
 
 			const chips = demand
 				.map((d) => {
@@ -1659,10 +1830,26 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 				})
 				.join('');
 
+			// A specific room, for "who wants France these dates". Rooms are listed
+			// with how many enquiries in view offer each; the type chips narrow it.
+			const esc = frappe.utils.escape_html;
+			const asked = {};
+			(this.state.room_requests || []).forEach((r) => (asked[r.room] = r.enquiries));
+			const room_opts = (this.state.masters.rooms || [])
+				.filter((r) => !f.room_type || r.room_type === f.room_type || r.name === f.room)
+				.map((r) => `<option value="${esc(r.name)}" ${f.room === r.name ? 'selected' : ''}>${esc(r.name)} · ${esc(
+					r.room_type
+				)}${asked[r.name] ? ` (${asked[r.name]})` : ''}</option>`)
+				.join('');
+
 			$('#hcrm-bf-rooms').html(`
-				<span class="hcrm-bf-label">${__('Room requested')}</span>
+				<span class="hcrm-bf-label">${__('Room type')}</span>
 				<button class="hcrm-roomchip ${f.room_type ? '' : 'active'}" data-room="">${__('Any')}</button>
 				${chips}
+				<span class="hcrm-bf-label hcrm-bf-label-room">${__('Room')}</span>
+				<select class="hcrm-bf-select" id="hcrm-bf-room">
+					<option value="">${__('Any room')}</option>${room_opts}
+				</select>
 			`);
 		},
 
@@ -1675,6 +1862,7 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 					from_date: f.preset === 'all' ? null : f.from,
 					to_date: f.preset === 'all' ? null : f.to,
 					room_type: f.room_type || null,
+					room: f.room || null,
 				},
 				callback: (r) => r.message && this.render_board(r.message),
 			});
@@ -1699,12 +1887,13 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 					.join('')
 			);
 			this.state.room_demand = data.room_demand || [];
+			this.state.room_requests = data.room_requests || [];
 			this.render_room_chips();
 			$('#hcrm-bf-count').text(
 				data.total === undefined
 					? ''
-					: data.room_type
-					? __('{0} enquiries for {1}', [data.total, data.room_type])
+					: data.room || data.room_type
+					? __('{0} enquiries for {1}', [data.total, data.room || data.room_type])
 					: __('{0} enquiries', [data.total])
 			);
 			this.bind_board();
@@ -1716,8 +1905,13 @@ frappe.pages['hotel-crm'].on_page_load = function (wrapper) {
 		 * renegotiate rather than chase. */
 		board_card(row) {
 			const esc = frappe.utils.escape_html;
+			// The room offered, with its type; a request made by type alone reads "2× Type".
 			const rooms = (row.rooms || [])
-				.map((r) => `${r.qty}× ${esc(r.room_type)}`)
+				.map((r) =>
+					r.room
+						? `<b>${esc(r.room)}</b> <span class="hcrm-row-type">${esc(r.room_type)}</span>`
+						: `${r.qty}× ${esc(r.room_type)}`
+				)
 				.join(', ');
 
 			const pax = [
